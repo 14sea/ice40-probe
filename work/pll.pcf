@@ -1,0 +1,8 @@
+# Constraints used by work/pll.v.  Pin 35 is the PLL pad on this device
+# (icebox pllinfo_db["5k"] places PLLOUT_A at io tile (12,31) block 1).
+set_io clk_pad 35
+set_io LED_R 40
+set_io LED_G 41
+set_io LED_B 39
+set_io GLOBAL_CONFLICT_PROBE 13
+set_io GLOBAL_CONFLICT_PROBE_B 20

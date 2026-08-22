@@ -1,0 +1,9 @@
+# Constraints used by work/leds.v and work/dense.v.
+set_io LED_G 41
+set_io LED_R 40
+set_io LED_B 39
+set_io SW[0] 18
+set_io SW[1] 19
+set_io SW[2] 20
+set_io SW[3] 21
+set_io clk 35
