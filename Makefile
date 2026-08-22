@@ -12,7 +12,7 @@ PYTHON ?= python3
 ORACLE_WORKERS ?= 16
 export PYTHONPYCACHEPREFIX := $(abspath $(BUILD)/pycache)
 
-.PHONY: all probes route-probe pll pll-check guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-dense-addrem verify-repro versions clean
+.PHONY: all probes route-probe pll pll-check spram spram-check guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-dense-addrem verify-repro versions clean
 
 all: $(BUILD)/leds.bin $(BUILD)/dense.asc probes
 
@@ -72,6 +72,20 @@ pll: $(BUILD)/pll.asc
 pll-check: $(BUILD)/pll.asc $(WORK)/pll_check.py $(WORK)/exhaustive.py $(WORK)/oracle.py
 	$(PYTHON) $(WORK)/pll_check.py $<
 
+# SPRAM fixture: the second hard-IP fixture.  UP5K read data leaves the IP
+# through ipcon-tile slf_op_* segments, a name absent from any design without
+# hard IP, so neither leds nor dense can exercise it.
+$(BUILD)/spram.json: $(WORK)/spram.v | $(BUILD)
+	$(YOSYS) -q -l $(BUILD)/spram_yosys.log -p 'synth_ice40 -json $@' $<
+
+$(BUILD)/spram.asc: $(BUILD)/spram.json $(WORK)/spram.pcf
+	$(NEXTPNR) --up5k --package sg48 --json $< --pcf $(WORK)/spram.pcf --asc $@ --freq 12 --log $(BUILD)/spram_pnr.log
+
+spram: $(BUILD)/spram.asc
+
+spram-check: $(BUILD)/spram.asc $(BUILD)/leds.asc $(WORK)/spram_check.py $(WORK)/exhaustive.py $(WORK)/oracle.py
+	$(PYTHON) $(WORK)/spram_check.py $<
+
 guarded: $(BUILD)/guarded.bin $(BUILD)/guarded_rt.v
 
 guarded-test: $(BUILD)/test_guarded.vvp
@@ -106,12 +120,12 @@ $(BUILD)/test_mut2.vvp: $(BUILD)/leds_mut2_sim.v $(WORK)/tb.v
 $(BUILD)/test_mut3.vvp: $(BUILD)/leds_mut3_sim.v $(WORK)/tb.v
 	$(IVERILOG) -g2012 -Wall -DEXPECT_MUT3 -o $@ $^
 
-test: pll-check guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
+test: pll-check spram-check guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
 	$(VVP) $(BUILD)/test_baseline.vvp
 	$(VVP) $(BUILD)/test_mut2.vvp
 	$(VVP) $(BUILD)/test_mut3.vvp
 	! $(PYTHON) $(WORK)/mkprobe.py 4 30 6 $(BUILD)/negative_mut2 --source-asc $(BUILD)/leds.asc --baseline-vlog $(BUILD)/leds_rt.v
-	$(PYTHON) -m py_compile $(WORK)/iceutil.py $(WORK)/bitclass.py $(WORK)/muxmodel.py $(WORK)/exhaustive.py $(WORK)/mkprobe.py $(WORK)/mkrouteprobe.py $(WORK)/decode_vlog.py $(WORK)/oracle.py $(WORK)/pll_check.py
+	$(PYTHON) -m py_compile $(WORK)/iceutil.py $(WORK)/bitclass.py $(WORK)/muxmodel.py $(WORK)/exhaustive.py $(WORK)/mkprobe.py $(WORK)/mkrouteprobe.py $(WORK)/decode_vlog.py $(WORK)/oracle.py $(WORK)/pll_check.py $(WORK)/spram_check.py
 
 analyze: $(BUILD)/leds.asc $(BUILD)/dense.asc
 	$(PYTHON) $(WORK)/bitclass.py $(BUILD)/leds.asc 20000 > $(BUILD)/bitclass.txt
@@ -157,7 +171,7 @@ oracle-dense-addrem: $(BUILD)/dense.asc
 	$(PYTHON) $(WORK)/oracle.py $< --out $(RESULTS)/oracle_dense_addrem.jsonl \
 		--flip-class addrem --workers $(ORACLE_WORKERS)
 
-verify-repro: all pll-check
+verify-repro: all pll-check spram-check
 	cmp $(WORK)/leds.asc $(BUILD)/leds.asc
 	cmp $(WORK)/dense.asc $(BUILD)/dense.asc
 	cmp $(WORK)/leds.bin $(BUILD)/leds.bin
@@ -167,6 +181,7 @@ verify-repro: all pll-check
 	cmp $(WORK)/leds_mut3.bin $(BUILD)/leds_mut3.bin
 	cmp $(WORK)/pll.asc $(BUILD)/pll.asc
 	cmp $(WORK)/pll_selector.asc $(BUILD)/pll_selector.asc
+	cmp $(WORK)/spram.asc $(BUILD)/spram.asc
 
 versions:
 	$(YOSYS) -V

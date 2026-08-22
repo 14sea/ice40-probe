@@ -195,6 +195,42 @@ oscillator 與所有其他硬 IP。另外 IceStorm 的 `icebox_vlog` 對 PAD 型
 core 輸出使用 `io_N/PAD` 這個名稱，而本模型統一標註在 `io_N/D_IN_0`；要涵蓋該情況
 需要另一個 fixture 或額外的 synthetic endpoint 建模。
 
+### 硬 IP：SPRAM fixture（2026-08-22）
+
+第二個硬 IP fixture，`work/spram.v` + `work/spram.pcf`，檢查腳本 `work/spram_check.py`
+（`make spram-check`，已掛進 `make test`）。
+
+**缺口與 PLL global 同型**：UP5K 單埠 RAM 的讀取資料是經由 ipcon tile 的
+`slf_op_*` 段落離開硬 IP 的。這個名稱在**沒有硬 IP 的設計裡完全不存在**（`leds`
+的圖中一個都沒有），因此以 `lutff_*/out`、`io_*/D_IN_*`、`ram/RDATA_*`、`mult/O_*`
+為基礎的 whitelist 從來比對不到它 —— 16 個 `DATAOUT` 端點全部是無 driver 的網路，
+任何把第二個來源接上去的突變都不會被判為衝突。
+
+**布局是量出來的，不是假設的**（分別放 1 顆與 4 顆 `SB_SPRAM256KA` 對照）：
+
+| 實例數 | 被設起的 `IpConfig` | 有 `slf_op` 的 ipcon tiles |
+|---|---|---|
+| 1 | `(0,1) CBIT_0` | `(0,1)`、`(0,2)`，各 8 個 = `DATAOUT[15:0]` |
+| 4 | `(0,1)` 與 `(25,1)` 的 `CBIT_0`+`CBIT_1` | `(0,1)–(0,4)` 與 `(25,1)–(25,4)`，各 8 個 |
+
+即每個 ipcon column 有兩顆實例：`CBIT_0` 啟用佔用 rows 1–2 的那顆，`CBIT_1` 啟用
+佔用 rows 3–4 的那顆。identity 由設定推導，**每個輸出位元各自一個 identity**
+（`("spram", x, y, index)`）—— 與 PLL 的 port 不同，`DATAOUT` 的各位元是彼此獨立的
+物理驅動源，若被接在一起本來就是爭用，所以這裡**不做** aliasing。
+
+**具名陽性**（model 與全圖重建 oracle 皆判定，增量 +1）：
+
+| 翻轉 | 啟用的 route | 參與的來源 |
+|---|---|---|
+| `(1,1) B1[48]` 0→1 | `lutff_0/out -> sp4_v_b_16` | `("lutff",1,1,0,"comb")` + `("spram",0,2,7)` |
+
+**負向回歸**：清掉 `CBIT_0` 後所有 `("spram",…)` identity 消失；未啟用實例的
+rows 3–4 不帶 identity；`leds` 設計零 SPRAM identity 且圖中完全沒有 `slf_op` 段落；
+停用 bank 上的 `slf_op` 解析為 `None`。
+
+**覆蓋邊界**：只驗過 **ipcon column 0 的一顆 `SB_SPRAM256KA`，且僅讀取資料路徑**。
+未涵蓋：寫入路徑、同 column 的第二顆、右側 column、以及 oscillator 與其餘所有硬 IP。
+
 ## 3. Decode、readback 與獨立性
 
 公開的 Lattice 配置流程描述寫入 configuration SRAM、啟動以及 CDONE 檢查，

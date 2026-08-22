@@ -155,3 +155,118 @@ class=adds targets=49090 remaining=49090 workers=16
   30200/49090  49.2 min  eta 30.8 min  positives=14
   30400/49090  49.5 min  eta 30.4 min  positives=14
   30600/49090  49.9 min  eta 30.1 min  positives=14
+  30800/49090  50.2 min  eta 29.8 min  positives=14
+  31000/49090  50.7 min  eta 29.6 min  positives=14
+  31200/49090  51.0 min  eta 29.3 min  positives=14
+  31400/49090  51.4 min  eta 29.0 min  positives=14
+  31600/49090  51.7 min  eta 28.6 min  positives=14
+  31800/49090  52.2 min  eta 28.4 min  positives=14
+  32000/49090  52.6 min  eta 28.1 min  positives=14
+  32200/49090  52.8 min  eta 27.7 min  positives=14
+  32400/49090  53.2 min  eta 27.4 min  positives=14
+  32600/49090  53.5 min  eta 27.1 min  positives=14
+  32800/49090  53.9 min  eta 26.8 min  positives=14
+  33000/49090  54.3 min  eta 26.5 min  positives=14
+  33200/49090  54.6 min  eta 26.1 min  positives=14
+  33400/49090  54.9 min  eta 25.8 min  positives=14
+  33600/49090  55.3 min  eta 25.5 min  positives=14
+  33800/49090  55.7 min  eta 25.2 min  positives=14
+  34000/49090  56.0 min  eta 24.8 min  positives=14
+  34200/49090  56.3 min  eta 24.5 min  positives=14
+  34400/49090  56.6 min  eta 24.2 min  positives=14
+  34600/49090  57.0 min  eta 23.9 min  positives=14
+  34800/49090  57.4 min  eta 23.6 min  positives=14
+  35000/49090  57.7 min  eta 23.2 min  positives=14
+  35200/49090  58.0 min  eta 22.9 min  positives=14
+  35400/49090  58.4 min  eta 22.6 min  positives=14
+  35600/49090  58.8 min  eta 22.3 min  positives=14
+  35800/49090  59.6 min  eta 22.1 min  positives=14
+  36000/49090  60.4 min  eta 22.0 min  positives=14
+  36200/49090  61.1 min  eta 21.7 min  positives=14
+  36400/49090  62.1 min  eta 21.6 min  positives=14
+  36600/49090  63.1 min  eta 21.5 min  positives=14
+  36800/49090  63.6 min  eta 21.2 min  positives=14
+  37000/49090  64.6 min  eta 21.1 min  positives=14
+  37200/49090  65.5 min  eta 20.9 min  positives=14
+  37400/49090  66.3 min  eta 20.7 min  positives=14
+  37600/49090  66.9 min  eta 20.4 min  positives=14
+  37800/49090  68.0 min  eta 20.3 min  positives=14
+  38000/49090  68.5 min  eta 20.0 min  positives=14
+  38200/49090  68.9 min  eta 19.6 min  positives=14
+  38400/49090  69.3 min  eta 19.3 min  positives=14
+  38600/49090  69.6 min  eta 18.9 min  positives=14
+  38800/49090  70.0 min  eta 18.6 min  positives=14
+  39000/49090  70.2 min  eta 18.2 min  positives=14
+  39200/49090  70.6 min  eta 17.8 min  positives=14
+  39400/49090  70.9 min  eta 17.4 min  positives=14
+  39600/49090  71.2 min  eta 17.1 min  positives=14
+  39800/49090  71.6 min  eta 16.7 min  positives=14
+  40000/49090  71.8 min  eta 16.3 min  positives=14
+  40200/49090  72.2 min  eta 16.0 min  positives=14
+  40400/49090  72.5 min  eta 15.6 min  positives=14
+  40600/49090  72.8 min  eta 15.2 min  positives=14
+  40800/49090  73.1 min  eta 14.9 min  positives=14
+  41000/49090  73.5 min  eta 14.5 min  positives=14
+  41200/49090  73.7 min  eta 14.1 min  positives=14
+  41400/49090  74.1 min  eta 13.8 min  positives=14
+  41600/49090  74.4 min  eta 13.4 min  positives=14
+  41800/49090  74.7 min  eta 13.0 min  positives=14
+  42000/49090  75.0 min  eta 12.7 min  positives=14
+  42200/49090  75.3 min  eta 12.3 min  positives=14
+  42400/49090  75.7 min  eta 11.9 min  positives=14
+  42600/49090  76.0 min  eta 11.6 min  positives=14
+  42800/49090  76.3 min  eta 11.2 min  positives=14
+  43000/49090  76.7 min  eta 10.9 min  positives=14
+  43200/49090  77.0 min  eta 10.5 min  positives=14
+  43400/49090  77.3 min  eta 10.1 min  positives=14
+  43600/49090  77.6 min  eta 9.8 min  positives=14
+  43800/49090  77.9 min  eta 9.4 min  positives=14
+  44000/49090  78.2 min  eta 9.0 min  positives=14
+  44200/49090  78.6 min  eta 8.7 min  positives=14
+  44400/49090  78.9 min  eta 8.3 min  positives=14
+  44600/49090  79.2 min  eta 8.0 min  positives=14
+  44800/49090  79.5 min  eta 7.6 min  positives=14
+  45000/49090  79.8 min  eta 7.3 min  positives=14
+  45200/49090  80.2 min  eta 6.9 min  positives=14
+  45400/49090  80.5 min  eta 6.5 min  positives=14
+  45600/49090  80.8 min  eta 6.2 min  positives=14
+  45800/49090  81.1 min  eta 5.8 min  positives=14
+  46000/49090  81.4 min  eta 5.5 min  positives=14
+  46200/49090  81.8 min  eta 5.1 min  positives=14
+  46400/49090  82.1 min  eta 4.8 min  positives=14
+  46600/49090  82.4 min  eta 4.4 min  positives=14
+  46800/49090  82.7 min  eta 4.0 min  positives=14
+  47000/49090  83.0 min  eta 3.7 min  positives=14
+  47200/49090  83.4 min  eta 3.3 min  positives=14
+  47400/49090  83.7 min  eta 3.0 min  positives=14
+  47600/49090  83.9 min  eta 2.6 min  positives=14
+  47800/49090  84.3 min  eta 2.3 min  positives=14
+  48000/49090  84.7 min  eta 1.9 min  positives=14
+  48200/49090  85.0 min  eta 1.6 min  positives=14
+  48400/49090  85.2 min  eta 1.2 min  positives=14
+  48600/49090  85.6 min  eta 0.9 min  positives=14
+  48800/49090  85.9 min  eta 0.5 min  positives=14
+  49000/49090  86.2 min  eta 0.2 min  positives=14
+
+checked 49090 / 49090 flips in this class
+workers=16 elapsed=86.2 min asc_sha256=e982ad491a2d3530… icestorm=0~20230218gitd20a5e9-1
+oracle positives : 14
+model/oracle disagreements: 0
+
+Positive coordinates:
+  tile=(4,27) bit=B2[50]
+  tile=(4,27) bit=B8[50]
+  tile=(4,27) bit=B10[50]
+  tile=(4,27) bit=B12[50]
+  tile=(4,27) bit=B14[50]
+  tile=(4,28) bit=B4[50]
+  tile=(4,28) bit=B8[50]
+  tile=(4,28) bit=B10[50]
+  tile=(4,28) bit=B12[50]
+  tile=(4,29) bit=B2[50]
+  tile=(4,29) bit=B4[50]
+  tile=(4,29) bit=B6[50]
+  tile=(4,30) bit=B2[50]
+  tile=(4,30) bit=B10[53]
+
+Driver identities: LUT/IO-input/RAM-read/UP5K-DSP/PLL outputs. glb_netwk_* is a distribution network and is not counted as a source; oscillator and other hard-IP outputs remain outside this oracle's coverage.

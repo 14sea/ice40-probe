@@ -254,13 +254,60 @@ def pll_driver_state(ic, icebox):
     return sources, occupied
 
 
-def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None):
+def ipconfig_bit(ic, x, y, name):
+    """Read one named IpConfig bit out of an ipcon tile."""
+    for entry in ic.tile_db(x, y):
+        if entry[1] == "IpConfig" and len(entry) > 2 and entry[2] == name:
+            row, column = entry[0][0][1:].rstrip("]").split("[")
+            return ic.tile(x, y)[int(row)][int(column)]
+    return None
+
+
+def spram_driver_state(ic):
+    """Decode active SPRAM read-data sources from configuration.
+
+    UP5K single-port RAM is hard IP in the ipcon columns.  Its read data leaves
+    the IP through `slf_op_*` segments on ipcon tiles -- a name that appears
+    nowhere in a design without hard IP -- so a whitelist built around
+    `lutff_*/out`, `io_*/D_IN_*`, `ram/RDATA_*` and `mult/O_*` never sees it and
+    the entire read port looks like an undriven net.
+
+    Layout, measured by placing one and then four SB_SPRAM256KA instances: each
+    ipcon column carries two instances; `CBIT_0` in that column's row-1 tile
+    enables the instance whose 16 outputs occupy rows 1 and 2, and `CBIT_1`
+    enables the one occupying rows 3 and 4.  Every output bit is its own
+    physical driver, so each segment gets its own identity.
+    """
+    sources = {}
+    if not ic.ipcon_tiles:
+        return sources
+    for x in sorted({tile_x for tile_x, _ in ic.ipcon_tiles}):
+        if (x, 1) not in ic.ipcon_tiles:
+            continue
+        for cbit, rows in ((0, (1, 2)), (1, (3, 4))):
+            if ipconfig_bit(ic, x, 1, f"CBIT_{cbit}") != "1":
+                continue
+            for y in rows:
+                if (x, y) not in ic.ipcon_tiles:
+                    continue
+                for index in range(8):
+                    sources[(x, y, f"slf_op_{index}")] = ("spram", x, y, index)
+    return sources
+
+
+def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
+                    spram_sources=None):
     x, y, name = segment
     if pll_sources is None or pll_blocks is None:
         pll_sources, pll_blocks = pll_driver_state(ic, icebox)
+    if spram_sources is None:
+        spram_sources = spram_driver_state(ic)
     pll = pll_sources.get(segment)
     if pll is not None:
         return pll
+    spram = spram_sources.get(segment)
+    if spram is not None:
+        return spram
     lut = LUT_DRIVER(name)
     if lut and (x, y) in ic.logic_tiles:
         index = int(lut.group(1))

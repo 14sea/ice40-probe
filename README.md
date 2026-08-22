@@ -31,10 +31,12 @@ The quantitative results are relative to the installed Project IceStorm
 database. A "global multi-driver candidate" is a prediction from a split-aware
 configured-net graph, not a direct electrical measurement on silicon. Its
 driver whitelist covers LUT, IO-input, RAM-read, and UP5K DSP outputs, plus a
-configuration-derived PLL source: `make pll-check` exercises UP5K
-`SB_PLL40_2F_PAD` port A's global path and port B's core path.  PLL coverage is
-therefore partial -- port A's core path and the other PLL variants are not
-exercised -- and oscillators and the remaining hard IP are not modelled at all.
+two configuration-derived hard-IP sources: `make pll-check` exercises UP5K
+`SB_PLL40_2F_PAD` port A's global path and port B's core path, and
+`make spram-check` exercises one `SB_SPRAM256KA` read-data port.  Hard-IP
+coverage is therefore partial -- PLL port A's core path, the other PLL variants,
+the SPRAM write path and its other three instances are not exercised, and
+oscillators and the remaining hard IP are not modelled at all.
 `glb_netwk_*` is never treated as a source; it is a distribution network.
 
 ## Requirements
