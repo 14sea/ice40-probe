@@ -1,0 +1,6 @@
+# Constraints used by work/osc.v.  Both clocks come from on-chip oscillators,
+# so no clock pin is constrained.
+set_io LED_R 40
+set_io LED_G 41
+set_io LED_B 39
+set_io OSC_CONFLICT_PROBE 35

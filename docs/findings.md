@@ -231,6 +231,41 @@ rows 3–4 不帶 identity；`leds` 設計零 SPRAM identity 且圖中完全沒�
 **覆蓋邊界**：只驗過 **ipcon column 0 的一顆 `SB_SPRAM256KA`，且僅讀取資料路徑**。
 未涵蓋：寫入路徑、同 column 的第二顆、右側 column、以及 oscillator 與其餘所有硬 IP。
 
+### 硬 IP：振盪器 fixture（2026-08-23）
+
+第三個硬 IP fixture，`work/osc.v` + `work/osc.pcf`，檢查腳本 `work/osc_check.py`
+（`make osc-check`，已掛進 `make test`）。
+
+**缺口與 PLL global 完全同型**：HFOSC 與 LFOSC 都是在圖上沒有自己來源段落的情況下
+餵進 `glb_netwk_*`。修正前兩條全域網路（832 與 830 個 segment，全是 `lutff_global`
+sink）**都沒有 driver**，任何接上第二個來源的突變都不會被判為衝突。
+
+**兩件事是量出來的，不是假設的**：
+
+1. **哪個 padin 索引屬於哪顆振盪器** —— 只放 HFOSC 會設 `padin_glb_netwk 4`，只放
+   LFOSC 會設 `5`。沒有沿用 icebox 原始碼裡那條註解，因為它標的是另一顆晶片的表。
+2. **`padin_glb_netwk` extra bit 代表來源在片上** —— 拿 padin 4 共用的那支實體接腳
+   （package pin 23）當全域時脈輸入時，**完全不設任何 extra bit**，而且該 pad 自己的
+   `io_0/D_IN_0` 會進入元件並被正確判為 driver。所以 pad 驅動與硬 IP 驅動是可分辨的，
+   模型也只標註**有證據的兩個索引**，其餘一律不碰；PLL 已擁有的全域會被跳過。
+
+**具名陽性**（model 與全圖重建 oracle 皆判定，增量 +1）：
+
+| 翻轉 | 啟用的 route | 參與的來源 |
+|---|---|---|
+| `(12,31) B4[15]` 0→1 | `local_g1_4 -> fabout` | `("lutff",5,28,0,"comb")` + `("hfosc",19,31)` |
+
+需先預置 `(12,31)` 的 `B5[14]`、`B5[15]`；該基準由腳本生成並斷言 route 集合 +0/−0、
+衝突數維持 0。fixture 另含一個 `OSC_CONFLICT_PROBE` 輸出腳，唯一目的是讓某個 LUT
+輸出落到 `(12,31)` 的 local net 上 —— 沒有它，那顆 fabout mux 的八個來源全都沒有
+driver，這個陽性就構造不出來。
+
+**覆蓋邊界（必須照這樣引用）**：只驗過 **HFOSC**。LFOSC 的全域對應的 `fabout` 位於
+io tile `(12,0)`，而 **sg48 封裝沒有把該 tile 的任何 block 接出來**，因此無法把 LUT
+輸出帶到那顆 mux，也就構造不出第二個來源 —— 這是封裝限制，不是模型缺陷。另外
+**`CLKHF_DIV` 在 ASC 裡完全沒有表示**（`0b00` 與 `0b10` 產生逐位元相同的設定），
+所以無法從設定驗證除頻值。其餘硬 IP（I2C、SPI、RGB 驅動器）仍未建模。
+
 ## 3. Decode、readback 與獨立性
 
 公開的 Lattice 配置流程描述寫入 configuration SRAM、啟動以及 CDONE 檢查，

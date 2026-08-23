@@ -139,6 +139,43 @@ def spram_driver_state(ic):
     return sources
 
 
+# padin index -> on-chip oscillator, established by placing each oscillator
+# alone: HFOSC alone sets padin_glb_netwk 4, LFOSC alone sets 5.
+OSCILLATOR_PADIN = {4: "hfosc", 5: "lfosc"}
+
+
+def oscillator_driver_state(ic, pll_sources):
+    """Annotate the global networks driven by the on-chip oscillators.
+
+    An oscillator, like a PLL global output, reaches `glb_netwk_*` with no
+    source segment of its own, so the whole network is otherwise driverless.
+
+    The pad-versus-hard-IP ambiguity is resolved by measurement, not assumption:
+    driving a global from the very package pin that shares padin index 4 sets no
+    extra bit at all and puts the pad's own `io_0/D_IN_0` in the component, so a
+    `padin_glb_netwk` extra bit means the source is on-chip.  Only the two
+    indices with evidence are annotated; any other index is left alone.
+    """
+    sources = {}
+    padin = ic.padin_pio_db()
+    for bit in ic.extra_bits:
+        entry = ic.lookup_extra_bit(bit)
+        if entry[0] != "padin_glb_netwk":
+            continue
+        index = int(entry[1])
+        kind = OSCILLATOR_PADIN.get(index)
+        if kind is None or index >= len(padin):
+            continue
+        x, y, _block = padin[index]
+        segment = (x, y, f"glb_netwk_{index}")
+        if segment in pll_sources:
+            # An enabled PLL already owns this network; do not add a second
+            # identity for one physical source.
+            continue
+        sources[segment] = (kind, x, y)
+    return sources
+
+
 class GlobalDriverGraph:
     """Split-aware configured-net graph for evaluating routing mutations.
 
@@ -156,6 +193,7 @@ class GlobalDriverGraph:
         self.icebox = icebox
         self.pll_sources, self.pll_output_blocks = pll_driver_state(ic, icebox)
         self.spram_sources = spram_driver_state(ic)
+        self.oscillator_sources = oscillator_driver_state(ic, self.pll_sources)
         seeds = set()
         enabled_edges = []
         tile_collections = (
@@ -267,6 +305,9 @@ class GlobalDriverGraph:
         spram = self.spram_sources.get(segment)
         if spram is not None:
             return spram
+        oscillator = self.oscillator_sources.get(segment)
+        if oscillator is not None:
+            return oscillator
         lut = LUT_DRIVER(name)
         if lut and (x, y) in self.ic.logic_tiles:
             index = int(lut.group(1))
@@ -590,7 +631,8 @@ def main() -> int:
                         f"destination_drivers={destination_drivers or '-'}"
                     )
     print(
-        "\nDriver boundary: LUT/IO-input/RAM-read/UP5K-DSP/PLL outputs; "
+        "\nDriver boundary: LUT/IO-input/RAM-read/UP5K-DSP/PLL/SPRAM/oscillator "
+        "outputs; "
         "oscillator and other hard-IP coverage is not complete."
     )
     print(

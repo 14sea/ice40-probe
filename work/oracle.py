@@ -295,19 +295,61 @@ def spram_driver_state(ic):
     return sources
 
 
+# padin index -> on-chip oscillator, established by placing each oscillator
+# alone: HFOSC alone sets padin_glb_netwk 4, LFOSC alone sets 5.
+OSCILLATOR_PADIN = {4: "hfosc", 5: "lfosc"}
+
+
+def oscillator_driver_state(ic, pll_sources):
+    """Annotate the global networks driven by the on-chip oscillators.
+
+    An oscillator, like a PLL global output, reaches `glb_netwk_*` with no
+    source segment of its own, so the whole network is otherwise driverless.
+
+    The pad-versus-hard-IP ambiguity is resolved by measurement, not assumption:
+    driving a global from the very package pin that shares padin index 4 sets no
+    extra bit at all and puts the pad's own `io_0/D_IN_0` in the component, so a
+    `padin_glb_netwk` extra bit means the source is on-chip.  Only the two
+    indices with evidence are annotated; any other index is left alone.
+    """
+    sources = {}
+    padin = ic.padin_pio_db()
+    for bit in ic.extra_bits:
+        entry = ic.lookup_extra_bit(bit)
+        if entry[0] != "padin_glb_netwk":
+            continue
+        index = int(entry[1])
+        kind = OSCILLATOR_PADIN.get(index)
+        if kind is None or index >= len(padin):
+            continue
+        x, y, _block = padin[index]
+        segment = (x, y, f"glb_netwk_{index}")
+        if segment in pll_sources:
+            # An enabled PLL already owns this network; do not add a second
+            # identity for one physical source.
+            continue
+        sources[segment] = (kind, x, y)
+    return sources
+
+
 def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
-                    spram_sources=None):
+                    spram_sources=None, oscillator_sources=None):
     x, y, name = segment
     if pll_sources is None or pll_blocks is None:
         pll_sources, pll_blocks = pll_driver_state(ic, icebox)
     if spram_sources is None:
         spram_sources = spram_driver_state(ic)
+    if oscillator_sources is None:
+        oscillator_sources = oscillator_driver_state(ic, pll_sources)
     pll = pll_sources.get(segment)
     if pll is not None:
         return pll
     spram = spram_sources.get(segment)
     if spram is not None:
         return spram
+    oscillator = oscillator_sources.get(segment)
+    if oscillator is not None:
+        return oscillator
     lut = LUT_DRIVER(name)
     if lut and (x, y) in ic.logic_tiles:
         index = int(lut.group(1))
@@ -586,10 +628,9 @@ def main() -> int:
     ):
         print(f"  tile=({record['x']},{record['y']}) bit=B{record['row']}[{record['column']}]")
     print(
-        "\nDriver identities: LUT/IO-input/RAM-read/UP5K-DSP/PLL outputs. "
+        "\nDriver identities: LUT/IO-input/RAM-read/UP5K-DSP/PLL/SPRAM outputs. "
         "glb_netwk_* is a distribution network and is not counted as a source; "
-        "oscillator and other hard-IP outputs remain outside this oracle's "
-        "coverage."
+        "other hard-IP outputs remain outside this oracle's coverage."
     )
     return 1 if disagreements else 0
 
