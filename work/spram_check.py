@@ -191,9 +191,10 @@ def main() -> int:
     print("PASS: SPRAM fixture, the named positive, and every negative regression")
     print(
         "Coverage boundary: one SB_SPRAM256KA in ipcon column 0, read-data path "
-        "only.  The write path, the second instance per column, the right-hand "
-        "column, and every remaining hard IP (oscillators above all) are not "
-        "exercised."
+        "only.  The write path, the second instance per column and the "
+        "right-hand column are not exercised.  The PLL and the on-chip "
+        "oscillators have their own fixtures; I2C, SPI and the RGB drivers are "
+        "not modelled."
     )
     return 0
 

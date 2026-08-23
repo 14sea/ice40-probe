@@ -19,9 +19,11 @@ Two things here were measured rather than assumed:
     So pad-driven and hard-IP-driven globals are distinguishable, and the model
     annotates only the two indices it has evidence for.
 
-`CLKHF_DIV` is deliberately not asserted: building the same fixture with
-"0b00" and "0b10" produces byte-identical configurations, so IceStorm does not
-represent the divider and no config-derived check of it is possible.
+`CLKHF_DIV` IS asserted below.  An earlier revision claimed the divider left no
+trace in the ASC; that was wrong.  It is encoded in `dsp1_tile (0,16)` as two
+IpConfig bits, `CBIT_3` low and `CBIT_4` high, and the earlier measurement
+missed it only because the tile enumeration omitted `dsp_tiles`.
+`work/osc_evidence.py` rebuilds all four divider values and pins the encoding.
 """
 
 from __future__ import annotations
@@ -89,6 +91,16 @@ def main() -> int:
     check(
         "LFOSC annotates its global network",
         sources.get((6, 31, "glb_netwk_5")) == ("lfosc", 6, 31),
+    )
+    divider = {}
+    for name, bit in (("CBIT_3", "B2[7]"), ("CBIT_4", "B5[7]")):
+        row, column = bit[1:].rstrip("]").split("[")
+        divider[name] = ic.dsp_tiles[1][(0, 16)][int(row)][int(column)]
+    check(
+        f"CLKHF_DIV reads back as 0b10 (CBIT_4={divider['CBIT_4']}, "
+        f"CBIT_3={divider['CBIT_3']})",
+        divider == {"CBIT_4": "1", "CBIT_3": "0"},
+        "encoded in dsp1_tile (0,16); see work/osc_evidence.py",
     )
     check("model baseline has no multi-driver net", graph.base_multi_driver_nets == 0)
     check("oracle baseline has no conflicting net", conflicting_nets(ic, icebox) == 0)
@@ -221,8 +233,7 @@ def main() -> int:
         "Coverage boundary: HFOSC only.  The LFOSC global's fabout sits in io "
         "tile (12,0), which package sg48 does not bond out, so no LUT output can "
         "be brought to that mux and no second source can be constructed there.  "
-        "CLKHF_DIV is not represented in the ASC at all.  The remaining hard IP "
-        "(I2C, SPI, RGB drivers) is still unmodelled."
+        "The remaining hard IP (I2C, SPI, RGB drivers) is still unmodelled."
     )
     return 0
 

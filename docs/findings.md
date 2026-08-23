@@ -107,7 +107,7 @@ fixture 都沒有新增 multi-driver 候選。修正方向是**風險曾被低�
 列舉翻轉、就地修改設定、**每個翻轉重建整張 `ic.group_segments()`**，再用自己的
 driver identity 計算每個元件的來源數；只 import 對方的模型**用於比對判決**，任何
 歧異都會被列出並使工具非零退出。`glb_netwk_*` 不計為 driver（分配網路不是來源）。
-三個 target 都是 opt-in，不在 `make test` 內。
+這些 sweep target 都是 opt-in，不在 `make test` 內。
 
 | 掃描 | 目標數 | 覆蓋 | oracle 陽性 | model/oracle 歧異 | 執行資訊 |
 |---|---:|---|---:|---:|---|
@@ -115,7 +115,10 @@ driver identity 計算每個元件的來源數；只 import 對方的模型**用
 | `leds` add+remove | 351 | 全類別窮舉 | 0 | 0 | 4 workers、3.2 分 |
 | `dense` add+remove | 36,343 | 全類別窮舉 | 0 | 0 | 16 workers、159.2 分 |
 | **`dense` adds-only** | **203,986** | **全類別窮舉** | **2,471** | **0** | **16 workers、880.2 分** |
-| **合計** | **290,770** | — | **2,485** | **0** | — |
+| **合計** | **289,770** | — | **2,485** | **0** | — |
+
+**「合計 289,770」是「fixture × 類別」的案例數，不是唯一物理座標數。** `leds` 與
+`dense` 的座標有 45,605 個重疊，四份合併後的**唯一座標是 244,165 個**。
 
 （2026-08-23：三份較早的結果檔曾被一次 `rm -rf build` 誤刪，已全部重跑，數字與原始一致；
 輸出目錄因此改為不受 clean 影響的 `results/`。上表耗時為重跑後的實測值。）
@@ -123,10 +126,18 @@ driver identity 計算每個元件的來源數；只 import 對方的模型**用
 三份結果檔的 header 都記錄 `icebox.py` sha256 `5d13cbb7…` 與 IceStorm 套件版本
 `0~20230218gitd20a5e9-1`；ASC sha256 分別是 leds `e982ad49…`、dense `9feba8df…`。
 
-**來源標示**：`leds` 兩份掃描是在 oracle 加入 summary 記錄功能**之前**啟動的，其
-JSONL 內只有 header 沒有 summary，因此上表的 worker 數與耗時係從執行 log 提取，
-**不是掃描當下產生的記錄**，也未事後補寫進資料檔。`dense` 那份是新版本產生的，
-worker 數與耗時直接來自檔內 summary 記錄。
+**來源標示**：四份結果檔**現在都含 summary 記錄**（早期兩份 `leds` 掃描在 summary
+功能加入前啟動、當時只有 header，但那兩份已於 2026-08-23 重跑），上表的 worker 數與
+耗時全部直接取自檔內 summary。
+
+**模型版本標示（重要）**：四份**不是**由同一個原始碼版本產生的。`dense` adds-only
+使用目前 HEAD 的 hash；`dense` add+remove 與 `leds` add+remove 使用較早版本；`leds`
+adds-only 使用更早版本。各次實際的 `oracle.py`／`exhaustive.py` sha256 都誠實記錄在
+各自的 header 與 `docs/evidence_manifest.md` 中。期間的差異是後來加入的 SPRAM 與
+oscillator identity，而 `leds`／`dense` 都不含硬 IP（兩者的 `spram_sources` 與
+`oscillator_sources` 實測皆為空集合），因此該變更對這兩個 fixture 是可證明的 no-op，
+沿用舊結果在技術上成立。**但這是「經 no-op 變更分析後承接的證據」，不是「四份都由
+當前 hash 直接產生」** —— 要主張後者必須重跑較早三份。
 
 `leds` adds-only 的 14 個陽性座標與 `exhaustive.py` 報告的 14 個**完全相同**
 （雙向差集為空），且每個的衝突網路增量都恰為 +1；`make oracle-leds-report` 會把
@@ -138,8 +149,17 @@ worker 數與耗時直接來自檔內 summary 記錄。
 oracle 完全一致。
 
 **`dense` 的 adds-only 類也已全掃完畢（2026-08-23）**：203,986 個座標逐一以整張圖
-重建獨立判定，oracle 陽性 **2,471 個，與模型預測完全相同**，零歧異。至此**四個類別
-全部完成全類別窮舉交叉驗證**，合計 290,770 個座標、2,485 個陽性、**0 次歧異**。
+重建獨立判定，oracle 陽性 **2,471 個，與模型預測完全相同**，零歧異。至此**這四個
+類別全部完成窮舉交叉驗證**，合計 289,770 個案例（244,165 個唯一座標）、2,485 個
+陽性、**0 次歧異**。
+
+**「四個類別」指的是本專案定義的四組 sweep，不是整顆 UP5K 的設定空間。**
+`oracle.py` 的列舉條件只涵蓋：非全零 logic tile、至少新增一條 routing path 的翻轉、
+且分為 adds-only 與 add+remove 兩類。**不涵蓋** removal-only 的翻轉、非 routing 座標、
+全零 logic tile，以及 logic tile 以外的 tile 類型。
+
+**「偽陰性已關閉」的正確範圍**：指增量模型相對於**全圖重建**沒有偽陰性，且是在同一份
+database 與同一組 driver identity 假設之下。**不能外推成「矽上沒有偽陰性」。**
 
 **仍未涵蓋**：driver whitelist 以外的硬 IP（I2C、SPI、RGB 驅動器；PLL 與 oscillator
 已有專屬 fixture，見上文，但覆蓋仍是部分的）。**更根本的是**：model 與 oracle 共用
@@ -270,9 +290,15 @@ driver，這個陽性就構造不出來。
 
 **覆蓋邊界（必須照這樣引用）**：只驗過 **HFOSC**。LFOSC 的全域對應的 `fabout` 位於
 io tile `(12,0)`，而 **sg48 封裝沒有把該 tile 的任何 block 接出來**，因此無法把 LUT
-輸出帶到那顆 mux，也就構造不出第二個來源 —— 這是封裝限制，不是模型缺陷。另外
-**`CLKHF_DIV` 在 ASC 裡完全沒有表示**（`0b00` 與 `0b10` 產生逐位元相同的設定），
-所以無法從設定驗證除頻值。其餘硬 IP（I2C、SPI、RGB 驅動器）仍未建模。
+輸出帶到那顆 mux，也就構造不出第二個來源 —— 這是封裝限制，不是模型缺陷。其餘硬 IP（I2C、SPI、RGB 驅動器）仍未建模。
+
+**⚠ 一項已撤回的錯誤結論**：本文件先前寫過「`CLKHF_DIV` 在 ASC 裡完全沒有表示」。
+**那是錯的。** 它編碼在 **`dsp1_tile (0,16)` 的兩個 IpConfig 位元**（`CBIT_3` = 低位
+`B2[7]`、`CBIT_4` = 高位 `B5[7]`），四個除頻值一一對應，`osc_check.py` 現在會直接
+斷言它。當初測錯的原因很有教訓價值：那次比對列舉了 io／logic／ipcon／ramb／ramt
+五種 tile，**漏掉了 `dsp_tiles`** —— 而那正是唯一有變化的 tile。這與本專案稍早
+「全域檢查被錯誤地包在 `if local_dual_route` 內」是同一種失效：**不完整的列舉會產出
+看起來乾淨的否定結論**。`work/osc_evidence.py` 現在會重建全部四個除頻值並釘住編碼。
 
 ## 3. Decode、readback 與獨立性
 

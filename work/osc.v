@@ -27,6 +27,7 @@ module top(
     wire clk_lf;
 
     SB_HFOSC #(
+        // Encoded in dsp1_tile (0,16): CBIT_4 high, CBIT_3 low.
         .CLKHF_DIV("0b10")        // 48 MHz / 4 = 12 MHz
     ) hfosc (
         .CLKHFPU(1'b1),

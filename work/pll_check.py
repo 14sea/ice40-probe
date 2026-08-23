@@ -298,8 +298,9 @@ def main() -> int:
         "Coverage boundary: UP5K SB_PLL40_2F_PAD, port A global and port B core. "
         "Port A core and the other PLL variants are not exercised; icebox_vlog "
         "names a PAD-型 PLL's port A core output io_N/PAD while this model "
-        "annotates io_N/D_IN_0. Oscillators and the remaining hard IP are not "
-        "modelled at all."
+        "annotates io_N/D_IN_0. SPRAM and the on-chip oscillators have their own "
+        "fixtures (make spram-check, make osc-check); the remaining hard IP -- "
+        "I2C, SPI and the RGB drivers -- is not modelled."
     )
     return 0
 
