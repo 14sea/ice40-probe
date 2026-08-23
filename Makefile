@@ -12,7 +12,7 @@ PYTHON ?= python3
 ORACLE_WORKERS ?= 16
 export PYTHONPYCACHEPREFIX := $(abspath $(BUILD)/pycache)
 
-.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-addrem verify-repro versions clean
+.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-full oracle-dense-addrem manifest archive verify-repro versions clean
 
 all: $(BUILD)/leds.bin $(BUILD)/dense.asc probes
 
@@ -184,9 +184,24 @@ oracle-leds-addrem: $(BUILD)/leds.asc
 	$(PYTHON) $(WORK)/oracle.py $< --out $(RESULTS)/oracle_leds_addrem.jsonl \
 		--flip-class addrem --workers $(ORACLE_WORKERS)
 
+oracle-dense-full: $(BUILD)/dense.asc
+	$(PYTHON) $(WORK)/oracle.py $< --out $(RESULTS)/oracle_dense_full.jsonl \
+		--workers $(ORACLE_WORKERS)
+
 oracle-dense-addrem: $(BUILD)/dense.asc
 	$(PYTHON) $(WORK)/oracle.py $< --out $(RESULTS)/oracle_dense_addrem.jsonl \
 		--flip-class addrem --workers $(ORACLE_WORKERS)
+
+# Evidence bookkeeping.  `manifest` re-runs the fixture checks and records the
+# hashes and counts of every sweep result; `archive` compresses the completed
+# sweeps so the evidence is not stored on one machine only.
+manifest:
+	$(PYTHON) $(WORK)/manifest.py
+
+archive:
+	mkdir -p $(RESULTS)/archive
+	for f in $(RESULTS)/*.jsonl; do gzip -9 -c "$$f" > $(RESULTS)/archive/$$(basename $$f).gz; done
+	cd $(RESULTS)/archive && sha256sum *.gz > SHA256SUMS
 
 verify-repro: all pll-check spram-check osc-check
 	cmp $(WORK)/leds.asc $(BUILD)/leds.asc

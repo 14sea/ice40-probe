@@ -1,0 +1,372 @@
+{
+  "tool_versions": {
+    "yosys": "Yosys 0.33 (git sha1 2584903a060)",
+    "nextpnr-ice40": "\"nextpnr-ice40\" -- Next Generation Place and Route (Version 0.6-3build5)",
+    "iverilog": "Icarus Verilog version 12.0 (stable) ()",
+    "python": "Python 3.12.3",
+    "fpga-icestorm": "0~20230218gitd20a5e9-1"
+  },
+  "fixtures": [
+    {
+      "script": "pll_check.py",
+      "asc": "pll.asc",
+      "asc_sha256": "4403ea73da79f800c78008d8c27d502bef2a405d7d7a6ab56e86ba576a4e5906",
+      "status": "pass",
+      "named_positives": [
+        {
+          "name": "CORE positive",
+          "tile": [
+            12,
+            30
+          ],
+          "bit": "B12[53]"
+        },
+        {
+          "name": "GLOBAL positive",
+          "tile": [
+            19,
+            0
+          ],
+          "bit": "B4[15]"
+        }
+      ],
+      "failed_checks": [],
+      "fixture": "pll"
+    },
+    {
+      "script": "spram_check.py",
+      "asc": "spram.asc",
+      "asc_sha256": "120d5bc6029d4042c82dd877d6cb5c4e9f1262104460620a6100efed95d865cf",
+      "status": "pass",
+      "named_positives": [
+        {
+          "name": "SPRAM positive",
+          "tile": [
+            1,
+            1
+          ],
+          "bit": "B1[48]"
+        }
+      ],
+      "failed_checks": [],
+      "fixture": "spram"
+    },
+    {
+      "script": "osc_check.py",
+      "asc": "osc.asc",
+      "asc_sha256": "ea94b44ebe1dfd5e333d9e709ef9ea662f3ee974ed520aeb93db9958f5364ae0",
+      "status": "pass",
+      "named_positives": [
+        {
+          "name": "HFOSC positive",
+          "tile": [
+            12,
+            31
+          ],
+          "bit": "B4[15]"
+        }
+      ],
+      "failed_checks": [],
+      "fixture": "oscillator"
+    }
+  ],
+  "sweeps": [
+    {
+      "file": "oracle_dense_addrem.jsonl",
+      "file_sha256": "9471017e31ccf7bbe0594c4ccae26866251a736a1eebd86603da9de816c353ab",
+      "file_bytes": 4274820,
+      "complete": true,
+      "header": {
+        "record": "header",
+        "asc": "build/dense.asc",
+        "asc_sha256": "9feba8df43621c93e4f3017e7651c6150513dd6735a0753ec8b83d7e9facc3e3",
+        "flip_class": "addrem",
+        "sample": 0,
+        "seed": 7,
+        "icebox_module": "/usr/share/fpga-icestorm/python/icebox.py",
+        "icebox_sha256": "5d13cbb7d1283680a64bf1515516af8410f6b4a82714e8ca302e02b7f65130ad",
+        "icestorm_package": "0~20230218gitd20a5e9-1",
+        "oracle_sha256": "9260cb600dcc20b56f781126c78781ce588dd2a8c5628b152706321cc494ba6c",
+        "exhaustive_sha256": "aaa7640b6779e352bd13cb67b268d80759ed15f1d5dbaab1a13871faace61d73",
+        "targets": 36343
+      },
+      "summary": {
+        "record": "summary",
+        "asc": "build/dense.asc",
+        "asc_sha256": "9feba8df43621c93e4f3017e7651c6150513dd6735a0753ec8b83d7e9facc3e3",
+        "icebox_sha256": "5d13cbb7d1283680a64bf1515516af8410f6b4a82714e8ca302e02b7f65130ad",
+        "icestorm_package": "0~20230218gitd20a5e9-1",
+        "flip_class": "addrem",
+        "workers": 16,
+        "elapsed_seconds": 9550.9,
+        "checked_this_run": 36343,
+        "coordinates": 36343,
+        "targets": 36343,
+        "positives": 0,
+        "disagreements": 0
+      },
+      "coordinates_checked": 36343,
+      "duplicate_records": 0,
+      "malformed_lines": 0,
+      "oracle_positives": 0,
+      "positive_coordinates": [],
+      "model_oracle_disagreements": 0
+    },
+    {
+      "file": "oracle_dense_full.jsonl",
+      "file_sha256": "b2610504ccb3db5bf6adb4ddf19d7633c45e94700a5f7b176c51036cb9e85f04",
+      "file_bytes": 89666,
+      "complete": false,
+      "header": {
+        "record": "header",
+        "asc": "build/dense.asc",
+        "asc_sha256": "9feba8df43621c93e4f3017e7651c6150513dd6735a0753ec8b83d7e9facc3e3",
+        "flip_class": "adds",
+        "sample": 0,
+        "seed": 7,
+        "icebox_module": "/usr/share/fpga-icestorm/python/icebox.py",
+        "icebox_sha256": "5d13cbb7d1283680a64bf1515516af8410f6b4a82714e8ca302e02b7f65130ad",
+        "icestorm_package": "0~20230218gitd20a5e9-1",
+        "oracle_sha256": "86e85d4d8e8378cf9670cb04854feb42f965903e833e72605211856d4fcdf912",
+        "exhaustive_sha256": "5b2602be18528bc0429f15ead8986794cc172b810da81650fe23e60f3971d26b",
+        "targets": 203986
+      },
+      "summary": null,
+      "coordinates_checked": 768,
+      "duplicate_records": 0,
+      "malformed_lines": 0,
+      "oracle_positives": 2,
+      "positive_coordinates": [
+        {
+          "tile": [
+            1,
+            1
+          ],
+          "bit": "B12[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            1,
+            2
+          ],
+          "bit": "B4[50]",
+          "conflict_net_delta": 1
+        }
+      ],
+      "model_oracle_disagreements": 0
+    },
+    {
+      "file": "oracle_leds_addrem.jsonl",
+      "file_sha256": "98b1933c9fd842dd0e1d5df911502bec604c2c33b118de4c9fc08051d75417d6",
+      "file_bytes": 42160,
+      "complete": true,
+      "header": {
+        "record": "header",
+        "asc": "build/leds.asc",
+        "asc_sha256": "e982ad491a2d353033bd1d1a1bc5c3eb3fd1b7589e39f699403686fff267c23a",
+        "flip_class": "addrem",
+        "sample": 0,
+        "seed": 7,
+        "icebox_module": "/usr/share/fpga-icestorm/python/icebox.py",
+        "icebox_sha256": "5d13cbb7d1283680a64bf1515516af8410f6b4a82714e8ca302e02b7f65130ad",
+        "icestorm_package": "0~20230218gitd20a5e9-1",
+        "oracle_sha256": "9260cb600dcc20b56f781126c78781ce588dd2a8c5628b152706321cc494ba6c",
+        "exhaustive_sha256": "aaa7640b6779e352bd13cb67b268d80759ed15f1d5dbaab1a13871faace61d73",
+        "targets": 351
+      },
+      "summary": {
+        "record": "summary",
+        "asc": "build/leds.asc",
+        "asc_sha256": "e982ad491a2d353033bd1d1a1bc5c3eb3fd1b7589e39f699403686fff267c23a",
+        "icebox_sha256": "5d13cbb7d1283680a64bf1515516af8410f6b4a82714e8ca302e02b7f65130ad",
+        "icestorm_package": "0~20230218gitd20a5e9-1",
+        "flip_class": "addrem",
+        "workers": 4,
+        "elapsed_seconds": 190.0,
+        "checked_this_run": 351,
+        "coordinates": 351,
+        "targets": 351,
+        "positives": 0,
+        "disagreements": 0
+      },
+      "coordinates_checked": 351,
+      "duplicate_records": 0,
+      "malformed_lines": 0,
+      "oracle_positives": 0,
+      "positive_coordinates": [],
+      "model_oracle_disagreements": 0
+    },
+    {
+      "file": "oracle_leds_full.jsonl",
+      "file_sha256": "b2170c09557817c40abdc9281b4b06e6cbbde3e61fac31b178375e2651a5fbb3",
+      "file_bytes": 5762110,
+      "complete": true,
+      "header": {
+        "record": "header",
+        "asc": "build/leds.asc",
+        "asc_sha256": "e982ad491a2d353033bd1d1a1bc5c3eb3fd1b7589e39f699403686fff267c23a",
+        "flip_class": "adds",
+        "sample": 0,
+        "seed": 7,
+        "icebox_module": "/usr/share/fpga-icestorm/python/icebox.py",
+        "icebox_sha256": "5d13cbb7d1283680a64bf1515516af8410f6b4a82714e8ca302e02b7f65130ad",
+        "icestorm_package": "0~20230218gitd20a5e9-1",
+        "oracle_sha256": "01876946dcb26a9dbaaf0eee6788a2f91a7e4e94d6cf817499a14585c1110148",
+        "exhaustive_sha256": "2112e1ff62ab0ab81b2b8d4bdfc519a26e06845da99e763d3729b0508fc82b6c",
+        "targets": 49090
+      },
+      "summary": {
+        "record": "summary",
+        "asc": "build/leds.asc",
+        "asc_sha256": "e982ad491a2d353033bd1d1a1bc5c3eb3fd1b7589e39f699403686fff267c23a",
+        "icebox_sha256": "5d13cbb7d1283680a64bf1515516af8410f6b4a82714e8ca302e02b7f65130ad",
+        "icestorm_package": "0~20230218gitd20a5e9-1",
+        "flip_class": "adds",
+        "workers": 16,
+        "elapsed_seconds": 5174.5,
+        "checked_this_run": 49090,
+        "coordinates": 49090,
+        "targets": 49090,
+        "positives": 14,
+        "disagreements": 0
+      },
+      "coordinates_checked": 49090,
+      "duplicate_records": 0,
+      "malformed_lines": 0,
+      "oracle_positives": 14,
+      "positive_coordinates": [
+        {
+          "tile": [
+            4,
+            27
+          ],
+          "bit": "B10[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            27
+          ],
+          "bit": "B12[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            27
+          ],
+          "bit": "B14[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            27
+          ],
+          "bit": "B2[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            27
+          ],
+          "bit": "B8[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            28
+          ],
+          "bit": "B10[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            28
+          ],
+          "bit": "B12[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            28
+          ],
+          "bit": "B4[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            28
+          ],
+          "bit": "B8[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            29
+          ],
+          "bit": "B2[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            29
+          ],
+          "bit": "B4[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            29
+          ],
+          "bit": "B6[50]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            30
+          ],
+          "bit": "B10[53]",
+          "conflict_net_delta": 1
+        },
+        {
+          "tile": [
+            4,
+            30
+          ],
+          "bit": "B2[50]",
+          "conflict_net_delta": 1
+        }
+      ],
+      "model_oracle_disagreements": 0
+    }
+  ],
+  "tracked_ascs": {
+    "leds.asc": "e982ad491a2d353033bd1d1a1bc5c3eb3fd1b7589e39f699403686fff267c23a",
+    "dense.asc": "9feba8df43621c93e4f3017e7651c6150513dd6735a0753ec8b83d7e9facc3e3",
+    "leds_mut2.asc": "629db3b9e517731cf69066294b11504623c44654f398165944c32bc44ef7927b",
+    "leds_mut3.asc": "c313d5295029e5af0c0d158c6eb5a9a93bba3931dc9748d26d68dda52d6538ee",
+    "pll.asc": "4403ea73da79f800c78008d8c27d502bef2a405d7d7a6ab56e86ba576a4e5906",
+    "pll_selector.asc": "6380e26b10c47869fed3ba049950e88a517a97f450121aac4009aa242198e82b",
+    "spram.asc": "120d5bc6029d4042c82dd877d6cb5c4e9f1262104460620a6100efed95d865cf",
+    "osc.asc": "ea94b44ebe1dfd5e333d9e709ef9ea662f3ee974ed520aeb93db9958f5364ae0",
+    "osc_selector.asc": "25d44fb2688b0965ec30ee7048f8b2a7d02cc88e82897729a3b19bb8e7a0d53a"
+  },
+  "model_sources": {
+    "iceutil.py": "3b53e9e78664db5f356b741f586d7a17d60af27c1de7629ab87bbd1b0b37b574",
+    "exhaustive.py": "5b2602be18528bc0429f15ead8986794cc172b810da81650fe23e60f3971d26b",
+    "oracle.py": "86e85d4d8e8378cf9670cb04854feb42f965903e833e72605211856d4fcdf912",
+    "mkprobe.py": "9628968cdd51b324084a0646e65962b5c474c24bcac938ba892a16ecbd274d0c"
+  }
+}

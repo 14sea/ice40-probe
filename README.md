@@ -136,6 +136,21 @@ No routing-risk candidate was programmed because no current measurement was
 available. The board was left with the same `leds_mut3.bin` image it had at the
 start. See `docs/findings.md` for hashes and evidence boundaries.
 
+## Scope
+
+This project checks that Project IceStorm's and nextpnr's published model of
+iCE40 UltraPlus routing and driver representation is self-consistent.  It is
+not security research, it does not analyse undocumented bitstream content, and
+it is not chip reverse engineering.  Where the public database is incomplete
+this is reported rather than worked around: `CLKHF_DIV`, for instance, leaves no
+trace in the ASC at all, which is a known gap in the database and is documented
+as one.
+
+## Licence
+
+ISC, matching Project IceStorm's own style.  See `LICENSE`; third-party tools
+and data keep their own licences and provenance and are not vendored here.
+
 ## Evidence that is not in the repository
 
 `results/*.jsonl` holds one record per checked flip and runs to several MB per
@@ -145,5 +160,12 @@ and acceptance reports beside them are tracked, and every number quoted in
 file records the ASC hash, the IceStorm module hash and package version, and the
 SHA-256 of both model sources, so a stale file cannot silently be resumed after
 the model changes.
+
+What *is* tracked is `docs/evidence_manifest.md` (`make manifest`), which
+re-runs the three hard-IP fixture checks and records, for every sweep, the
+SHA-256 of the file, the hashes it was produced against, the counts, and the
+coordinates of every oracle positive.  `results/archive/*.jsonl.gz`
+(`make archive`) is tracked too: the sweeps compress about forty-fold, so the
+raw evidence fits in the repository rather than living on one machine.
 
 No licence has been chosen yet.

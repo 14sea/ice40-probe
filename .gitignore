@@ -11,6 +11,10 @@ __pycache__/
 results/*.jsonl
 results/*.jsonl.tmp
 
+# ...but the gzipped archives ARE tracked: they compress ~40x (a 5.7 MB sweep
+# becomes 141 KB), so the evidence travels with the repository instead of
+# existing only on one machine.  `make archive` regenerates them.
+
 # Stale byproducts that predate the Makefile flow; `make all` regenerates the
 # real ones under build/.
 work/dense.json
@@ -21,3 +25,6 @@ work/leds_mut.bin
 work/leds_mut.v
 work/leds_rt_sim.v
 work/leds_mut2_sim.v
+results/*.log
+
+# The completed sweeps are archived as results/archive/*.jsonl.gz instead.
