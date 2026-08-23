@@ -16,10 +16,20 @@ from quoting an earlier run.
 
 ## Model sources
 
-- `work/iceutil.py`: `5bfa02b31e4c7992e80e24b8d8b87c4158f35cf663c53547f41d99a892e88439`
+- `work/bitclass.py`: `f7d49b45f3378485a5da39522db0cdbe00ff350dc64f2f663fa7b0a0370007a2`
+- `work/decode_vlog.py`: `a7c261fa8a07c8e3c46f7928001cdc580753567fa9ed9b4e44d59f0052a8507e`
 - `work/exhaustive.py`: `6f36b4582916b84010ccd61be89c486a05bfa9e8eeabd3903cf63bc3aea8accd`
-- `work/oracle.py`: `86e85d4d8e8378cf9670cb04854feb42f965903e833e72605211856d4fcdf912`
+- `work/iceutil.py`: `5bfa02b31e4c7992e80e24b8d8b87c4158f35cf663c53547f41d99a892e88439`
+- `work/manifest.py`: `62ff940642484093d59b71ac1794e67973fd461a7de02823339d191c49f0833b`
 - `work/mkprobe.py`: `9628968cdd51b324084a0646e65962b5c474c24bcac938ba892a16ecbd274d0c`
+- `work/mkrouteprobe.py`: `795f3f411d4fd8637b5dca344ac458a405ba419abd273e52874df373b804e41d`
+- `work/muxmodel.py`: `30e484330728e8b5eb562a59ebcfb18d7f625a7ae1abc68e8dfe475fbff774e9`
+- `work/oracle.py`: `86e85d4d8e8378cf9670cb04854feb42f965903e833e72605211856d4fcdf912`
+- `work/osc_check.py`: `72b787e8491e990eaa08f4657f7e3abeeca8df75c25ab5f1025c47bca17829a1`
+- `work/osc_evidence.py`: `b320e3d26eec5367d528bf04f5989252993253920bdfd2c87819b69bf8b46811`
+- `work/pll_check.py`: `5df54fe5a7396f5699fe7e878b3047fa384dbb36120ae48fcea831650199869b`
+- `work/spram_check.py`: `231ec7ebd5a0fb676b64cea22401d248a9cf0119dd5ea8739f226ad882a836ba`
+- `work/tile_coverage_check.py`: `20b7c6021ba2e5f7f13e22dadd368ecafe300aacfaab7a4dbd9cfd1024bdb1e7`
 
 ## Hard-IP fixtures
 

@@ -172,8 +172,10 @@ def main() -> int:
     except Exception:  # noqa: BLE001
         manifest["tool_versions"]["fpga-icestorm"] = "unknown"
 
-    for source in ("iceutil.py", "exhaustive.py", "oracle.py", "mkprobe.py"):
-        manifest.setdefault("model_sources", {})[source] = sha256(HERE / source)
+    # Enumerated, not hand-listed.  A hand-written list is precisely how this
+    # project twice lost track of something it should have covered.
+    for source in sorted(HERE.glob("*.py")):
+        manifest.setdefault("model_sources", {})[source.name] = sha256(source)
 
     for name, script, asc in FIXTURE_CHECKS:
         entry = run_fixture_check(script, asc)
