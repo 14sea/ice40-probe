@@ -111,9 +111,14 @@ driver identity 計算每個元件的來源數；只 import 對方的模型**用
 
 | 掃描 | 目標數 | 覆蓋 | oracle 陽性 | model/oracle 歧異 | 執行資訊 |
 |---|---:|---|---:|---:|---|
-| `leds` adds-only | 49,090 | 全類別窮舉 | 14 | 0 | 16 workers、75.6 分 — **由執行 log 提取**（見下） |
-| `leds` add+remove | 351 | 全類別窮舉 | 0 | 0 | 10 workers、45 秒 — 由執行 log 提取 |
-| `dense` add+remove | 36,343 | 全類別窮舉 | 0 | 0 | 16 workers、107.6 分 — **JSONL summary 記錄** |
+| `leds` adds-only | 49,090 | 全類別窮舉 | 14 | 0 | 16 workers、86.2 分 |
+| `leds` add+remove | 351 | 全類別窮舉 | 0 | 0 | 4 workers、3.2 分 |
+| `dense` add+remove | 36,343 | 全類別窮舉 | 0 | 0 | 16 workers、159.2 分 |
+| **`dense` adds-only** | **203,986** | **全類別窮舉** | **2,471** | **0** | **16 workers、880.2 分** |
+| **合計** | **290,770** | — | **2,485** | **0** | — |
+
+（2026-08-23：三份較早的結果檔曾被一次 `rm -rf build` 誤刪，已全部重跑，數字與原始一致；
+輸出目錄因此改為不受 clean 影響的 `results/`。上表耗時為重跑後的實測值。）
 
 三份結果檔的 header 都記錄 `icebox.py` sha256 `5d13cbb7…` 與 IceStorm 套件版本
 `0~20230218gitd20a5e9-1`；ASC sha256 分別是 leds `e982ad49…`、dense `9feba8df…`。
@@ -132,11 +137,14 @@ worker 數與耗時直接來自檔內 summary 記錄。
 `dense` 的 add+remove 類亦全數判定，split-aware 分割邏輯在 36,343 個案例上與獨立
 oracle 完全一致。
 
-**仍未涵蓋**：`dense` 的 adds-only 類（203,986 個，未掃，以該 fixture 的實測速率
-估計約 10 小時）；driver whitelist 以外的硬 IP 來源（PLL、oscillator），且兩個
-fixture 都沒有實例化這些硬 IP，因此這條邊界目前**測不到**，需要專屬 fixture；以及
-model 與 oracle 共用同一個 IceStorm database，兩者一致不能排除資料庫本身的錯誤。
-矽上仍未做過任何爭用量測。
+**`dense` 的 adds-only 類也已全掃完畢（2026-08-23）**：203,986 個座標逐一以整張圖
+重建獨立判定，oracle 陽性 **2,471 個，與模型預測完全相同**，零歧異。至此**四個類別
+全部完成全類別窮舉交叉驗證**，合計 290,770 個座標、2,485 個陽性、**0 次歧異**。
+
+**仍未涵蓋**：driver whitelist 以外的硬 IP（I2C、SPI、RGB 驅動器；PLL 與 oscillator
+已有專屬 fixture，見上文，但覆蓋仍是部分的）。**更根本的是**：model 與 oracle 共用
+同一個 IceStorm database，兩者一致**不能排除資料庫本身的錯誤** —— `CLKHF_DIV` 完全
+不進 ASC 正是資料庫仍有已知缺口的證據。矽上從未做過任何爭用量測。
 
 ### 硬 IP：PLL fixture 與由設定推導的 driver identity（2026-08-22）
 
