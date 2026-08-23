@@ -300,6 +300,14 @@ io tile `(12,0)`，而 **sg48 封裝沒有把該 tile 的任何 block 接出來*
 「全域檢查被錯誤地包在 `if local_dual_route` 內」是同一種失效：**不完整的列舉會產出
 看起來乾淨的否定結論**。`work/osc_evidence.py` 現在會重建全部四個除頻值並釘住編碼。
 
+**工程對策（不只是修這一個 bug）**：所有腳本不再手寫 tile 類型清單，改用
+`iceutil.configuration_tiles` 這個 canonical iterator；`assert_tile_coverage`
+會在 `iceconfig` 出現任何**未被分類**的 tile collection 時直接失敗（必須明確納入
+迭代，或以理由具名列入 `NON_TILE_CONFIGURATION`）。`make tile-coverage` 另外釘住
+那個具體回歸：canonical 列舉找得到 `dsp_tiles[1] (0,16) B5[7]` 這個除頻位元，而
+**舊的手寫清單找不到** —— 失敗案例被刻意保留在測試裡，因為一個從未被觸發過的
+守衛什麼也證明不了。
+
 ## 3. Decode、readback 與獨立性
 
 公開的 Lattice 配置流程描述寫入 configuration SRAM、啟動以及 CDONE 檢查，

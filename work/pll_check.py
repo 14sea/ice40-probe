@@ -29,7 +29,12 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from exhaustive import GlobalDriverGraph, tile_model  # noqa: E402
-from iceutil import load_icebox, signed_tile_bits  # noqa: E402
+from iceutil import (  # noqa: E402
+    assert_tile_coverage,
+    configuration_tiles,
+    load_icebox,
+    signed_tile_bits,
+)
 from oracle import conflicting_nets, driver_identity, pll_driver_state  # noqa: E402
 
 ASC = Path(sys.argv[1] if len(sys.argv) > 1 else "build/pll.asc")
@@ -81,26 +86,18 @@ def pll_field(ic, icebox, prefix, width):
 def enabled_routes(ic, icebox):
     """Every routing/buffer entry the configuration currently enables."""
     routes = set()
-    collections = (
-        ic.io_tiles,
-        ic.logic_tiles,
-        ic.ramb_tiles,
-        ic.ramt_tiles,
-        *ic.dsp_tiles,
-        ic.ipcon_tiles,
-    )
-    for tiles in collections:
-        for (x, y), tile in tiles.items():
-            config = icebox.tileconfig(tile)
-            for entry in ic.tile_db(x, y):
-                if entry[1] not in ("routing", "buffer"):
-                    continue
-                if not ic.tile_has_net(x, y, entry[2]) or not ic.tile_has_net(
-                    x, y, entry[3]
-                ):
-                    continue
-                if config.match(entry[0]):
-                    routes.add((x, y, entry[2], entry[3]))
+    assert_tile_coverage(ic)
+    for _collection, (x, y), tile in configuration_tiles(ic):
+        config = icebox.tileconfig(tile)
+        for entry in ic.tile_db(x, y):
+            if entry[1] not in ("routing", "buffer"):
+                continue
+            if not ic.tile_has_net(x, y, entry[2]) or not ic.tile_has_net(
+                x, y, entry[3]
+            ):
+                continue
+            if config.match(entry[0]):
+                routes.add((x, y, entry[2], entry[3]))
     return routes
 
 

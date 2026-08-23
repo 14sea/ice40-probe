@@ -113,6 +113,13 @@ file so the next resume appends cleanly.
   entire segment graph per flip, sharing no conflict logic with `exhaustive.py`
   (which it imports only to compare verdicts).  `glb_netwk_*` is treated as a
   distribution network, not a source.
+- `work/tile_coverage_check.py`: guards the enumeration itself.  Two defects
+  here produced a clean-looking negative from an incomplete list -- the second
+  concluded that `CLKHF_DIV` left no trace in the ASC, when it lives in the one
+  tile collection the list omitted.  Scripts now iterate through
+  `iceutil.configuration_tiles`, any collection an `iceconfig` exposes must be
+  iterated or named as non-tile configuration with a reason, and the regression
+  keeps the old list around as the failing case.
 - `work/mkrouteprobe.py`: checked host-only generator for a single routing-risk probe.
 - `work/guarded.v`: switch-gated routing experiment with three PMOD2 analyzer probes.
 - `work/guarded_tb.v`: verifies safe reset, 32/64 predicted mismatch duty, and recovery.

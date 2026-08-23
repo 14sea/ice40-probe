@@ -16,8 +16,8 @@ from quoting an earlier run.
 
 ## Model sources
 
-- `work/iceutil.py`: `3b53e9e78664db5f356b741f586d7a17d60af27c1de7629ab87bbd1b0b37b574`
-- `work/exhaustive.py`: `5b2602be18528bc0429f15ead8986794cc172b810da81650fe23e60f3971d26b`
+- `work/iceutil.py`: `5bfa02b31e4c7992e80e24b8d8b87c4158f35cf663c53547f41d99a892e88439`
+- `work/exhaustive.py`: `6f36b4582916b84010ccd61be89c486a05bfa9e8eeabd3903cf63bc3aea8accd`
 - `work/oracle.py`: `86e85d4d8e8378cf9670cb04854feb42f965903e833e72605211856d4fcdf912`
 - `work/mkprobe.py`: `9628968cdd51b324084a0646e65962b5c474c24bcac938ba892a16ecbd274d0c`
 

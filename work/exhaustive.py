@@ -15,6 +15,8 @@ import re
 from iceutil import (
     COLS,
     ROWS,
+    assert_tile_coverage,
+    configuration_tiles,
     is_lut_init_position,
     load_icebox,
     positive_bit_name,
@@ -196,29 +198,21 @@ class GlobalDriverGraph:
         self.oscillator_sources = oscillator_driver_state(ic, self.pll_sources)
         seeds = set()
         enabled_edges = []
-        tile_collections = (
-            ic.io_tiles,
-            ic.logic_tiles,
-            ic.ramb_tiles,
-            ic.ramt_tiles,
-            *ic.dsp_tiles,
-            ic.ipcon_tiles,
-        )
-        for tiles in tile_collections:
-            for (x, y), tile in tiles.items():
-                config = icebox.tileconfig(tile)
-                for entry in ic.tile_db(x, y):
-                    if entry[1] not in ("routing", "buffer"):
-                        continue
-                    if not ic.tile_has_net(x, y, entry[2]) or not ic.tile_has_net(
-                        x, y, entry[3]
-                    ):
-                        continue
-                    left = (x, y, entry[2])
-                    right = (x, y, entry[3])
-                    seeds.update((left, right))
-                    if config.match(entry[0]):
-                        enabled_edges.append((left, right))
+        assert_tile_coverage(ic)
+        for _collection, (x, y), tile in configuration_tiles(ic):
+            config = icebox.tileconfig(tile)
+            for entry in ic.tile_db(x, y):
+                if entry[1] not in ("routing", "buffer"):
+                    continue
+                if not ic.tile_has_net(x, y, entry[2]) or not ic.tile_has_net(
+                    x, y, entry[3]
+                ):
+                    continue
+                left = (x, y, entry[2])
+                right = (x, y, entry[3])
+                seeds.update((left, right))
+                if config.match(entry[0]):
+                    enabled_edges.append((left, right))
         seeds.update(self.pll_sources)
 
         # Seed every possible programmable endpoint but suppress all

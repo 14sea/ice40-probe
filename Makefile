@@ -12,7 +12,7 @@ PYTHON ?= python3
 ORACLE_WORKERS ?= 16
 export PYTHONPYCACHEPREFIX := $(abspath $(BUILD)/pycache)
 
-.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check osc-evidence guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-full oracle-dense-addrem manifest archive verify-repro versions clean
+.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check osc-evidence tile-coverage guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-full oracle-dense-addrem manifest archive verify-repro versions clean
 
 all: $(BUILD)/leds.bin $(BUILD)/dense.asc probes
 
@@ -96,6 +96,9 @@ $(BUILD)/osc.asc: $(BUILD)/osc.json $(WORK)/osc.pcf
 
 osc: $(BUILD)/osc.asc
 
+tile-coverage: $(BUILD)/leds.asc $(BUILD)/dense.asc $(BUILD)/pll.asc $(BUILD)/spram.asc $(BUILD)/osc.asc $(WORK)/tile_coverage_check.py $(WORK)/iceutil.py
+	$(PYTHON) $(WORK)/tile_coverage_check.py
+
 osc-evidence: $(WORK)/osc_evidence.py $(WORK)/exhaustive.py $(WORK)/oracle.py
 	$(PYTHON) $(WORK)/osc_evidence.py
 
@@ -136,12 +139,12 @@ $(BUILD)/test_mut2.vvp: $(BUILD)/leds_mut2_sim.v $(WORK)/tb.v
 $(BUILD)/test_mut3.vvp: $(BUILD)/leds_mut3_sim.v $(WORK)/tb.v
 	$(IVERILOG) -g2012 -Wall -DEXPECT_MUT3 -o $@ $^
 
-test: pll-check spram-check osc-check osc-evidence guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
+test: tile-coverage pll-check spram-check osc-check osc-evidence guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
 	$(VVP) $(BUILD)/test_baseline.vvp
 	$(VVP) $(BUILD)/test_mut2.vvp
 	$(VVP) $(BUILD)/test_mut3.vvp
 	! $(PYTHON) $(WORK)/mkprobe.py 4 30 6 $(BUILD)/negative_mut2 --source-asc $(BUILD)/leds.asc --baseline-vlog $(BUILD)/leds_rt.v
-	$(PYTHON) -m py_compile $(WORK)/iceutil.py $(WORK)/bitclass.py $(WORK)/muxmodel.py $(WORK)/exhaustive.py $(WORK)/mkprobe.py $(WORK)/mkrouteprobe.py $(WORK)/decode_vlog.py $(WORK)/oracle.py $(WORK)/pll_check.py $(WORK)/spram_check.py $(WORK)/osc_check.py $(WORK)/osc_evidence.py
+	$(PYTHON) -m py_compile $(WORK)/iceutil.py $(WORK)/bitclass.py $(WORK)/muxmodel.py $(WORK)/exhaustive.py $(WORK)/mkprobe.py $(WORK)/mkrouteprobe.py $(WORK)/decode_vlog.py $(WORK)/oracle.py $(WORK)/pll_check.py $(WORK)/spram_check.py $(WORK)/osc_check.py $(WORK)/osc_evidence.py $(WORK)/tile_coverage_check.py
 
 analyze: $(BUILD)/leds.asc $(BUILD)/dense.asc
 	$(PYTHON) $(WORK)/bitclass.py $(BUILD)/leds.asc 20000 > $(BUILD)/bitclass.txt
