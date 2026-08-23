@@ -48,7 +48,7 @@ sys.path.insert(0, str(HERE))
 from iceutil import COLS, ROWS, load_icebox, signed_tile_bits  # noqa: E402
 
 # Driver identities.  A distribution network (glb_netwk_*) is not a source.
-LUT_DRIVER = re.compile(r"lutff_([0-7])/(out|lout)").fullmatch
+LUT_DRIVER = re.compile(r"lutff_([0-7])/(out|lout|cout)").fullmatch
 IO_DRIVER = re.compile(r"io_([01])/D_IN_([01])").fullmatch
 RAM_DRIVER = re.compile(r"ram/RDATA_\d+").fullmatch
 DSP_DRIVER = re.compile(r"mult/O_\d+").fullmatch
@@ -353,8 +353,15 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
     lut = LUT_DRIVER(name)
     if lut and (x, y) in ic.logic_tiles:
         index = int(lut.group(1))
-        registered = icebox.get_lutff_seq_bits(ic.logic_tiles[(x, y)], index)[1] == "1"
-        return ("lutff", x, y, index, lut.group(2) if registered else "comb")
+        sequential = icebox.get_lutff_seq_bits(ic.logic_tiles[(x, y)], index)
+        if lut.group(2) == "cout":
+            # Carry out is its own physical output, but only when the cell
+            # generates carry: `cout -> in_3` is programmable routing, so a
+            # mutation can surface the segment in a cell with carry disabled.
+            if sequential[0] != "1":
+                return None
+            return ("lutff", x, y, index, "carry")
+        return ("lutff", x, y, index, lut.group(2) if sequential[1] == "1" else "comb")
     io = IO_DRIVER(name)
     if io and (x, y, int(io.group(1))) in pll_blocks:
         return None

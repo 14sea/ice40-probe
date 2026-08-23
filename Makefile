@@ -12,7 +12,7 @@ PYTHON ?= python3
 ORACLE_WORKERS ?= 16
 export PYTHONPYCACHEPREFIX := $(abspath $(BUILD)/pycache)
 
-.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check osc-evidence tile-coverage guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-full oracle-dense-addrem manifest archive verify-repro versions clean
+.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check osc-evidence tile-coverage carry-check hard-ip-inventory guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-full oracle-dense-addrem manifest archive verify-repro versions clean
 
 all: $(BUILD)/leds.bin $(BUILD)/dense.asc probes
 
@@ -96,7 +96,15 @@ $(BUILD)/osc.asc: $(BUILD)/osc.json $(WORK)/osc.pcf
 
 osc: $(BUILD)/osc.asc
 
-tile-coverage: $(BUILD)/leds.asc $(BUILD)/dense.asc $(BUILD)/pll.asc $(BUILD)/spram.asc $(BUILD)/osc.asc $(WORK)/tile_coverage_check.py $(WORK)/iceutil.py
+carry-check: $(BUILD)/leds.asc $(BUILD)/dense.asc $(WORK)/carry_check.py $(WORK)/exhaustive.py
+	$(PYTHON) $(WORK)/carry_check.py
+
+# Survey step for the hard-IP milestone: decides whether a fixture is warranted
+# before any identity is written.  Host-only; builds four designs.
+hard-ip-inventory: $(WORK)/hard_ip_inventory.py $(WORK)/exhaustive.py
+	$(PYTHON) $(WORK)/hard_ip_inventory.py
+
+tile-coverage: $(BUILD)/leds.asc $(BUILD)/dense.asc $(BUILD)/pll.asc $(BUILD)/spram.asc $(BUILD)/osc.asc $(WORK)/tile_coverage_check.py $(WORK)/carry_check.py $(WORK)/hard_ip_inventory.py $(WORK)/iceutil.py
 	$(PYTHON) $(WORK)/tile_coverage_check.py
 
 osc-evidence: $(WORK)/osc_evidence.py $(WORK)/exhaustive.py $(WORK)/oracle.py
@@ -139,7 +147,7 @@ $(BUILD)/test_mut2.vvp: $(BUILD)/leds_mut2_sim.v $(WORK)/tb.v
 $(BUILD)/test_mut3.vvp: $(BUILD)/leds_mut3_sim.v $(WORK)/tb.v
 	$(IVERILOG) -g2012 -Wall -DEXPECT_MUT3 -o $@ $^
 
-test: tile-coverage pll-check spram-check osc-check osc-evidence guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
+test: tile-coverage carry-check pll-check spram-check osc-check osc-evidence guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
 	$(VVP) $(BUILD)/test_baseline.vvp
 	$(VVP) $(BUILD)/test_mut2.vvp
 	$(VVP) $(BUILD)/test_mut3.vvp

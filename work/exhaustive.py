@@ -24,7 +24,7 @@ from iceutil import (
 )
 
 
-LUT_DRIVER = re.compile(r"lutff_([0-7])/(out|lout)").fullmatch
+LUT_DRIVER = re.compile(r"lutff_([0-7])/(out|lout|cout)").fullmatch
 IO_DRIVER = re.compile(r"io_([01])/D_IN_([01])").fullmatch
 RAM_DRIVER = re.compile(r"ram/RDATA_\d+").fullmatch
 DSP_DRIVER = re.compile(r"mult/O_\d+").fullmatch
@@ -305,12 +305,22 @@ class GlobalDriverGraph:
         lut = LUT_DRIVER(name)
         if lut and (x, y) in self.ic.logic_tiles:
             index = int(lut.group(1))
+            sequential = self.icebox.get_lutff_seq_bits(
+                self.ic.logic_tiles[(x, y)], index
+            )
+            if lut.group(2) == "cout":
+                # The carry output is a second physical output of the same LC,
+                # so it gets its own identity -- but only when the LC actually
+                # generates carry.  `cout -> in_3` is a programmable routing
+                # entry, so a mutation can pull the segment into the graph in a
+                # cell whose carry logic is off; calling that a source would
+                # invent a driver.  CarryEnable is seq bit 0.
+                if sequential[0] != "1":
+                    return None
+                return ("lutff", x, y, index, "carry")
             # With no FF, IceStorm models `out` as an alias of combinational
             # `lout`; do not count two names for that one physical source.
-            registered = self.icebox.get_lutff_seq_bits(
-                self.ic.logic_tiles[(x, y)], index
-            )[1] == "1"
-            kind = lut.group(2) if registered else "comb"
+            kind = lut.group(2) if sequential[1] == "1" else "comb"
             return ("lutff", x, y, index, kind)
         io = IO_DRIVER(name)
         if io and (x, y, int(io.group(1))) in self.pll_output_blocks:
