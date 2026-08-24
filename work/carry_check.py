@@ -28,8 +28,11 @@ merely absent from these fixtures, it cannot be constructed.
 from __future__ import annotations
 
 from collections import Counter
+import gzip
 import json
 from pathlib import Path
+import shutil
+import tempfile
 import re
 import sys
 
@@ -50,6 +53,39 @@ def check(label: str, ok: bool, detail: str = "") -> None:
     print(f"  [{'PASS' if ok else 'FAIL'}] {label}{(' -- ' + detail) if detail else ''}")
     if not ok:
         failures.append(label)
+
+
+def archived_positives(name: str, results: Path | None = None) -> set:
+    """The oracle positives of one archived sweep, by coordinate.
+
+    `results/*.jsonl` is gitignored: only `results/archive/*.jsonl.gz` travels
+    with the repository.  Reading only the plain file and skipping when it is
+    absent would make this comparison pass by default on every clean clone --
+    the same shape of failure this file exists to rule out -- so the archive is
+    a fallback, not an optional extra, and neither present is an error.
+    """
+    results = results or (ROOT / "results")
+    plain = results / name
+    packed = results / "archive" / f"{name}.gz"
+    if plain.exists():
+        opener, path = plain.open, plain
+    elif packed.exists():
+        opener, path = (lambda: gzip.open(packed, "rt", encoding="utf-8")), packed
+    else:
+        raise FileNotFoundError(
+            f"neither {plain} nor {packed} exists; "
+            f"run the sweep or restore the archive"
+        )
+    positives = set()
+    with opener() as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if record.get("record") or not record["oracle"]:
+                continue
+            positives.add((record["x"], record["y"], record["row"], record["column"]))
+    return positives
 
 
 def load(name: str):
@@ -217,16 +253,11 @@ def main() -> int:
         check(f"{fixture}: and {expected} distinct coordinates, one visit each",
               len(coordinates) == expected, f"{len(coordinates)}")
 
-        path = ROOT / "results" / results
-        if not path.exists():
-            print(f"  [skip] {results} not present; run the sweep to compare coordinates")
+        try:
+            archived = archived_positives(results)
+        except FileNotFoundError as error:
+            check(f"{fixture}: the archived sweep is readable", False, str(error))
             continue
-        archived = set()
-        for line in path.read_text(encoding="utf-8").splitlines():
-            record = json.loads(line)
-            if record.get("record") or not record["oracle"]:
-                continue
-            archived.add((record["x"], record["y"], record["row"], record["column"]))
         # Both directions.  Counting the archive alone would pass even if the
         # current model had moved every positive somewhere else.
         lost = sorted(archived - coordinates)
@@ -237,6 +268,33 @@ def main() -> int:
               not gained, f"{len(gained)} new: {gained[:3]}")
         check(f"{fixture}: archived positive count is {expected}",
               len(archived) == expected, f"{len(archived)}")
+
+    print("\n=== and it works from a clean clone, where only the .gz is tracked ===")
+    reference = archived_positives("oracle_leds_full.jsonl")
+    with tempfile.TemporaryDirectory() as directory:
+        clone = Path(directory)
+        (clone / "archive").mkdir()
+        shutil.copy(
+            ROOT / "results" / "archive" / "oracle_leds_full.jsonl.gz",
+            clone / "archive" / "oracle_leds_full.jsonl.gz",
+        )
+        from_archive = archived_positives("oracle_leds_full.jsonl", clone)
+        check(
+            "with only the tracked archive present the positives still load",
+            from_archive == reference and len(from_archive) == 14,
+            f"{len(from_archive)} positive(s)",
+        )
+    with tempfile.TemporaryDirectory() as directory:
+        try:
+            archived_positives("oracle_leds_full.jsonl", Path(directory))
+            refused = False
+        except FileNotFoundError:
+            refused = True
+        check(
+            "and with neither file present it fails instead of skipping",
+            refused,
+            "a skip here would let the comparison pass by default",
+        )
 
     print()
     if failures:

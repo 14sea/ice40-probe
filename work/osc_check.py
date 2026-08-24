@@ -34,6 +34,7 @@ import sys
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import exhaustive  # noqa: E402
 from exhaustive import GlobalDriverGraph, tile_model  # noqa: E402
 from iceutil import load_icebox, signed_tile_bits  # noqa: E402
 from oracle import (  # noqa: E402
@@ -299,10 +300,35 @@ def main() -> int:
         ("hfosc", 19, 31) in f_identities,
         f"{sorted(i for i in f_identities if i)}",
     )
+    # The counterfactual, actually run: rebuild the graph with the fabric
+    # endpoint's identity withheld and evaluate the same flip.  Asserting only
+    # that the identity exists would not show it is what decides the verdict.
+    original_state = exhaustive.oscillator_driver_state
+
+    def without_fabric_endpoint(ic_arg, pll_arg, icebox_arg=None):
+        sources = original_state(ic_arg, pll_arg, icebox_arg)
+        sources.pop((fx, fy, fsource), None)
+        return sources
+
+    exhaustive.oscillator_driver_state = without_fabric_endpoint
+    try:
+        _icebox_cf, ic_cf = load(FABRIC_SELECTOR_ASC)
+        graph_cf = GlobalDriverGraph(ic_cf, _icebox_cf)
+        cf_hit, cf_drivers = graph_cf.mutation_creates_multi_driver(
+            fx, fy, f_additions, f_removals
+        )
+    finally:
+        exhaustive.oscillator_driver_state = original_state
     check(
-        "and without the identity this flip would look clean",
-        graph_fp.driver_identity((fx, fy, fsource)) is not None,
-        "the segment is otherwise a sink with no source in the graph",
+        "withholding just this endpoint's identity makes the same flip look clean",
+        graph_cf.driver_identity((fx, fy, fsource)) is None and not cf_hit,
+        f"identity={graph_cf.driver_identity((fx, fy, fsource))}, conflict={cf_hit}, "
+        f"drivers={cf_drivers}",
+    )
+    check(
+        "and the global path's identity is untouched by that removal",
+        graph_cf.driver_identity((19, 31, "glb_netwk_4")) == ("hfosc", 19, 31),
+        "only the fabric endpoint was withheld, so the false negative is localised",
     )
 
     # --- negative regressions ------------------------------------------------

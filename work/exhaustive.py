@@ -558,15 +558,6 @@ def analyse(ic, icebox, details: bool = False) -> Analysis:
     mux_endpoint_count = 0
     jointly_satisfiable_pairs = 0
 
-
-    non_zero_tiles = [
-        xy for xy, tile in sorted(ic.logic_tiles.items()) if any("1" in row for row in tile)
-    ]
-    effects = Counter()
-    candidate_details = []
-    mux_endpoint_count = 0
-    jointly_satisfiable_pairs = 0
-
     for x, y in non_zero_tiles:
         entries, muxes, bit_to_entries = tile_model(ic, x, y)
         tile = ic.logic_tiles[(x, y)]
