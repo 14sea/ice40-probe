@@ -31,8 +31,44 @@ ROOT = HERE.parent
 BUILD = ROOT / "build" / "inventory"
 sys.path.insert(0, str(HERE))
 
-from exhaustive import GlobalDriverGraph  # noqa: E402
+from exhaustive import GlobalDriverGraph, ipconfig_bit  # noqa: E402
 from iceutil import load_icebox  # noqa: E402
+
+# icebox's own cell database, which states every hard-IP port as a segment and
+# every enabling bit as a coordinate.  It is the authority here; the synthesised
+# designs below are the check on it, not the other way round.  Reading a count
+# off a design instead would measure the testbench: the SPI figure this file
+# first reported was 19 because the fixture drove one chip select out of four.
+PLACEMENTS = {
+    "i2c": ("I2C", (0, 31, 0)),
+    "spi": ("SPI", (0, 0, 0)),
+    "ledda": ("LEDDA_IP", (0, 31, 2)),
+    "rgba": ("RGBA_DRV", (0, 30, 0)),
+}
+
+
+def cell_ports(icebox, name: str) -> dict:
+    kind, placement = PLACEMENTS[name]
+    for key, cell in icebox.extra_cells_db["5k"].items():
+        if key[0] == kind and key[1] == placement:
+            return cell
+    raise KeyError(f"{kind} at {placement} is not in extra_cells_db['5k']")
+
+
+def db_endpoints(cell: dict) -> set:
+    return {
+        (value[0], value[1], value[2])
+        for value in cell.values()
+        if isinstance(value, tuple) and len(value) == 3
+        and str(value[2]).startswith("slf_op")
+    }
+
+
+def db_enable_bits(cell: dict) -> dict:
+    return {
+        port: value for port, value in cell.items()
+        if "ENABLE" in port or port.endswith("_EN")
+    }
 
 failures: list[str] = []
 
@@ -63,7 +99,8 @@ SPI = """module top(input clk, inout MOSI, inout MISO, inout SCK, inout SCSN,
            output LED_R, output LED_G, output LED_B);
    reg [7:0] addr = 0; reg stb = 0;
    always @(posedge clk) begin addr <= addr + 1'b1; stb <= ~stb; end
-   wire [7:0] dato; wire ack, irq, wkup, so, soe, mo, moe, scko, sckoe, mcsno0, mcsnoe0;
+   wire [7:0] dato; wire ack, irq, wkup, so, soe, mo, moe, scko, sckoe;
+   wire [3:0] mcsno, mcsnoe;
    SB_SPI #(.BUS_ADDR74("0b0000")) spi (
       .SBCLKI(clk), .SBRWI(1'b1), .SBSTBI(stb),
       .SBADRI7(addr[7]), .SBADRI6(addr[6]), .SBADRI5(addr[5]), .SBADRI4(addr[4]),
@@ -75,10 +112,14 @@ SPI = """module top(input clk, inout MOSI, inout MISO, inout SCK, inout SCSN,
       .SBDATO3(dato[3]), .SBDATO2(dato[2]), .SBDATO1(dato[1]), .SBDATO0(dato[0]),
       .SBACKO(ack), .SPIIRQ(irq), .SPIWKUP(wkup),
       .SO(so), .SOE(soe), .MO(mo), .MOE(moe),
-      .SCKO(scko), .SCKOE(sckoe), .MCSNO0(mcsno0), .MCSNOE0(mcsnoe0));
+      .SCKO(scko), .SCKOE(sckoe),
+      .MCSNO0(mcsno[0]), .MCSNO1(mcsno[1]), .MCSNO2(mcsno[2]), .MCSNO3(mcsno[3]),
+      .MCSNOE0(mcsnoe[0]), .MCSNOE1(mcsnoe[1]), .MCSNOE2(mcsnoe[2]),
+      .MCSNOE3(mcsnoe[3]));
    assign MISO = soe ? so : 1'bz;  assign MOSI = moe ? mo : 1'bz;
-   assign SCK = sckoe ? scko : 1'bz;  assign SCSN = mcsnoe0 ? mcsno0 : 1'bz;
-   assign LED_R = ~(^dato); assign LED_G = ~ack; assign LED_B = ~(irq ^ wkup);
+   assign SCK = sckoe ? scko : 1'bz;  assign SCSN = mcsnoe[0] ? mcsno[0] : 1'bz;
+   assign LED_R = ~(^dato ^ ^mcsno[3:1]); assign LED_G = ~(ack ^ ^mcsnoe[3:1]);
+   assign LED_B = ~(irq ^ wkup);
 endmodule
 """
 
@@ -181,20 +222,65 @@ def main() -> int:
             print(f"    ... and {len(entry['slf_op']) - 6} more")
         print(f"  components with no driver at all: {len(entry['undriven'])}")
 
-    print("\n=== verdicts ===")
-    for name, expected_tiles in (
-        ("i2c", {(0, 29), (0, 30)}),
-        ("spi", {(0, 19), (0, 20), (0, 21)}),
-        ("ledda", {(0, 28), (0, 29)}),
-    ):
-        entry = results[name]
-        tiles = {(s[0], s[1]) for s in entry["slf_op"]}
+    print("\n=== verdicts: the database's endpoint set, exactly ===")
+    icebox = load_icebox()
+    for name, expected_count in (("i2c", 15), ("spi", 25), ("ledda", 4), ("rgba", 0)):
+        cell = cell_ports(icebox, name)
+        expected = db_endpoints(cell)
+        measured = {(s[0], s[1], s[2]) for s in results[name]["slf_op"]}
         check(
-            f"{name}: drives the fabric, so a fixture is warranted",
-            bool(entry["slf_op"]) and tiles == expected_tiles,
-            f"{sorted(tiles)}",
+            f"{name}: the database states {expected_count} fabric endpoints",
+            len(expected) == expected_count, f"{len(expected)}",
+        )
+        # Both directions, and by coordinate.  Comparing the tiles an endpoint
+        # falls in -- which is what this file did first -- passes with half of
+        # them missing.
+        check(
+            f"{name}: the placed design reaches every one of them",
+            not (expected - measured),
+            f"{len(expected - measured)} unreached: {sorted(expected - measured)[:3]}",
+        )
+        check(
+            f"{name}: and reaches nothing the database does not list",
+            not (measured - expected),
+            f"{len(measured - expected)} extra: {sorted(measured - expected)[:3]}",
         )
 
+    print("\n=== enabling configuration, read from the built design ===")
+    baseline = icebox.iceconfig()
+    baseline.read_file(str(ROOT / "build" / "leds.asc"))
+    for name in ("i2c", "spi", "rgba"):
+        cell = cell_ports(icebox, name)
+        enables = db_enable_bits(cell)
+        active = icebox.iceconfig()
+        active.read_file(str(BUILD / f"{name}.asc"))
+        for port, (x, y, bit) in sorted(enables.items()):
+            check(
+                f"{name}: {port} at ({x},{y}) {bit} is set",
+                ipconfig_bit(active, x, y, bit) == "1",
+                f"read {ipconfig_bit(active, x, y, bit)!r}",
+            )
+            # Without this the check above would pass on a bit that is simply
+            # always 1, and prove nothing about the IP being enabled.
+            check(
+                f"{name}: and clear in a design without the IP",
+                ipconfig_bit(baseline, x, y, bit) == "0",
+                f"read {ipconfig_bit(baseline, x, y, bit)!r}",
+            )
+
+    ledda_enables = db_enable_bits(cell_ports(icebox, "ledda"))
+    check(
+        "ledda: the database states no enabling bit at all",
+        not ledda_enables, f"{sorted(ledda_enables)}",
+    )
+    print(
+        "  => UNDETERMINED, not 'always on': with no configuration bit there is\n"
+        "     no way to read whether LEDDA drives the fabric in a given design.\n"
+        "     Whether to treat it as an unconditional source is a question about\n"
+        "     the silicon, and this survey cannot answer it."
+    )
+
+    print("\n=== rgba: a negative, from three independent observations ===")
     rgba = results["rgba"]
     check(
         "rgba: nextpnr creates no SB_IO for its outputs",
@@ -202,9 +288,12 @@ def main() -> int:
         "the driver takes the pads; there is no IO block to source from",
     )
     check(
-        "rgba: contributes no fabric endpoint",
+        "rgba: the placed design contributes no fabric endpoint",
         not rgba["slf_op"],
-        "two independent observations, not one enumeration",
+    )
+    check(
+        "rgba: and the database lists no fabric port for it either",
+        not db_endpoints(cell_ports(icebox, "rgba")),
     )
     print(
         "  => rgba is a fabric sink and a package-pin driver.  Not applicable to\n"

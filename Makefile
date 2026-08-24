@@ -10,9 +10,12 @@ IVERILOG ?= iverilog
 VVP ?= vvp
 PYTHON ?= python3
 ORACLE_WORKERS ?= 16
+# Enumerated, never hand-listed: a hand-written list is how this project twice
+# lost track of something it should have covered.
+PY_SOURCES := $(wildcard $(WORK)/*.py)
 export PYTHONPYCACHEPREFIX := $(abspath $(BUILD)/pycache)
 
-.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check osc-evidence tile-coverage carry-check hard-ip-inventory guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-full oracle-dense-addrem manifest archive verify-repro versions clean
+.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check osc-evidence tile-coverage carry-check hard-ip-inventory guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-full oracle-dense-addrem manifest manifest-check archive verify-repro versions clean
 
 all: $(BUILD)/leds.bin $(BUILD)/dense.asc probes
 
@@ -147,12 +150,12 @@ $(BUILD)/test_mut2.vvp: $(BUILD)/leds_mut2_sim.v $(WORK)/tb.v
 $(BUILD)/test_mut3.vvp: $(BUILD)/leds_mut3_sim.v $(WORK)/tb.v
 	$(IVERILOG) -g2012 -Wall -DEXPECT_MUT3 -o $@ $^
 
-test: tile-coverage carry-check pll-check spram-check osc-check osc-evidence guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
+test: tile-coverage carry-check pll-check spram-check osc-check osc-evidence manifest-check guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
 	$(VVP) $(BUILD)/test_baseline.vvp
 	$(VVP) $(BUILD)/test_mut2.vvp
 	$(VVP) $(BUILD)/test_mut3.vvp
 	! $(PYTHON) $(WORK)/mkprobe.py 4 30 6 $(BUILD)/negative_mut2 --source-asc $(BUILD)/leds.asc --baseline-vlog $(BUILD)/leds_rt.v
-	$(PYTHON) -m py_compile $(WORK)/iceutil.py $(WORK)/bitclass.py $(WORK)/muxmodel.py $(WORK)/exhaustive.py $(WORK)/mkprobe.py $(WORK)/mkrouteprobe.py $(WORK)/decode_vlog.py $(WORK)/oracle.py $(WORK)/pll_check.py $(WORK)/spram_check.py $(WORK)/osc_check.py $(WORK)/osc_evidence.py $(WORK)/tile_coverage_check.py
+	$(PYTHON) -m py_compile $(PY_SOURCES)
 
 analyze: $(BUILD)/leds.asc $(BUILD)/dense.asc
 	$(PYTHON) $(WORK)/bitclass.py $(BUILD)/leds.asc 20000 > $(BUILD)/bitclass.txt
@@ -212,6 +215,13 @@ oracle-dense-addrem: $(BUILD)/dense.asc
 manifest:
 	$(PYTHON) $(WORK)/manifest.py
 
+# Freshness gate.  Without it a stale manifest is invisible: `make test` stays
+# green while the manifest describes model sources that no longer exist.  Only
+# the tracked-tree sections are checkable -- the sweep results are untracked.
+manifest-check: $(WORK)/manifest.py
+	$(PYTHON) $(WORK)/manifest.py --self-test
+	$(PYTHON) $(WORK)/manifest.py --check
+
 archive:
 	mkdir -p $(RESULTS)/archive
 	for f in $(RESULTS)/*.jsonl; do gzip -9 -c "$$f" > $(RESULTS)/archive/$$(basename $$f).gz; done
@@ -230,6 +240,7 @@ verify-repro: all pll-check spram-check osc-check
 	cmp $(WORK)/spram.asc $(BUILD)/spram.asc
 	cmp $(WORK)/osc.asc $(BUILD)/osc.asc
 	cmp $(WORK)/osc_selector.asc $(BUILD)/osc_selector.asc
+	cmp $(WORK)/osc_fabric_selector.asc $(BUILD)/osc_fabric_selector.asc
 
 versions:
 	$(YOSYS) -V

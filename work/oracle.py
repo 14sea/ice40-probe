@@ -300,11 +300,31 @@ def spram_driver_state(ic):
 OSCILLATOR_PADIN = {4: "hfosc", 5: "lfosc"}
 
 
-def oscillator_driver_state(ic, pll_sources):
-    """Annotate the global networks driven by the on-chip oscillators.
+def oscillator_fabric_endpoints(icebox) -> dict:
+    """`kind -> segments` for the oscillators' direct fabric outputs.
+
+    Derived here from the cell database independently of exhaustive.py: this
+    file exists to disagree with the model when the model is wrong, so it must
+    not import the model's answer.
+    """
+    endpoints = {}
+    for key, cell in icebox.extra_cells_db["5k"].items():
+        kind = str(key[0]).lower()
+        if kind not in ("hfosc", "lfosc"):
+            continue
+        for port, value in cell.items():
+            if str(port).endswith("_FABRIC"):
+                endpoints.setdefault(kind, set()).add((value[0], value[1], value[2]))
+    return {kind: sorted(segments) for kind, segments in endpoints.items()}
+
+
+def oscillator_driver_state(ic, pll_sources, icebox=None):
+    """Annotate the segments driven by the on-chip oscillators.
 
     An oscillator, like a PLL global output, reaches `glb_netwk_*` with no
     source segment of its own, so the whole network is otherwise driverless.
+    It also has a second output that enters the fabric directly; both carry the
+    same identity, because they are two paths from one physical source.
 
     The pad-versus-hard-IP ambiguity is resolved by measurement, not assumption:
     driving a global from the very package pin that shares padin index 4 sets no
@@ -312,8 +332,11 @@ def oscillator_driver_state(ic, pll_sources):
     `padin_glb_netwk` extra bit means the source is on-chip.  Only the two
     indices with evidence are annotated; any other index is left alone.
     """
+    if icebox is None:
+        icebox = load_icebox()
     sources = {}
     padin = ic.padin_pio_db()
+    fabric = oscillator_fabric_endpoints(icebox)
     for bit in ic.extra_bits:
         entry = ic.lookup_extra_bit(bit)
         if entry[0] != "padin_glb_netwk":
@@ -329,6 +352,8 @@ def oscillator_driver_state(ic, pll_sources):
             # identity for one physical source.
             continue
         sources[segment] = (kind, x, y)
+        for endpoint in fabric.get(kind, ()):
+            sources[endpoint] = (kind, x, y)
     return sources
 
 
@@ -340,7 +365,7 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
     if spram_sources is None:
         spram_sources = spram_driver_state(ic)
     if oscillator_sources is None:
-        oscillator_sources = oscillator_driver_state(ic, pll_sources)
+        oscillator_sources = oscillator_driver_state(ic, pll_sources, icebox)
     pll = pll_sources.get(segment)
     if pll is not None:
         return pll

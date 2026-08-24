@@ -308,6 +308,99 @@ io tile `(12,0)`，而 **sg48 封裝沒有把該 tile 的任何 block 接出來*
 **舊的手寫清單找不到** —— 失敗案例被刻意保留在測試裡，因為一個從未被觸發過的
 守衛什麼也證明不了。
 
+### 硬 IP 盤點與 carry-out identity（2026-08-24）
+
+在寫任何新 identity 之前先做的普查步驟，`work/hard_ip_inventory.py`
+（`make hard-ip-inventory`）。判定一律要求不只一個獨立觀察。
+
+| 硬 IP | 放置 | fabric 端點（`slf_op`） | 啟用位元 | 判定 |
+|---|---|---|---|---|
+| `SB_I2C` | X0/Y31 | **15** @ (0,29),(0,30) | `I2C_ENABLE_0/1` @ (13,31)/(12,31) | 值得建 fixture |
+| `SB_SPI` | X0/Y0 | **25** @ (0,19)–(0,22) | `SPI_ENABLE_0..3` @ (7,0)/(6,0) | 值得建 fixture |
+| `SB_LEDDA_IP` | X0/Y31 | **4** @ (0,28),(0,29) | **無** | 值得建 fixture；啟用狀態**未判定** |
+| `SB_RGBA_DRV` | X0/Y30 | **0** | `RGBA_DRV_EN` @ (0,28) `CBIT_5` | **不適用於 driver graph** |
+
+**權威來源是 `icebox.extra_cells_db['5k']`，不是我們合成出來的設計。** 這份 db 直接
+給出每個硬 IP 的 port→segment 對應與啟用位元座標；合成設計的角色是**驗證這份 db**，
+而不是取代它。
+
+**⚠ 一個已修正的數字**：本盤點最初報告 SPI 有 **19** 個 fabric 端點。**那是錯的**
+—— 19 是我那份 Verilog 的性質，不是元件的性質：它只接了 `MCSNO0`/`MCSNOE0`，
+漏掉 `MCSNO1..3` 與 `MCSNOE1..3`，於是 `(0,21)` 的三個與 `(0,22)` 的三個端點從未被
+placer 觸及。量到的集合是 db 的**真子集**（無多餘項），正確數字是 **25**。這是本專案
+第三次踩到同一種失效：**不完整的列舉產出一個看起來像結論的數字**。對策同前 ——
+驗收改為與 db 的端點集合做**雙向**比對，而不是比對「端點落在哪些 tile」（後者少一半
+也會通過）。
+
+**啟用位元是從編出來的設計讀回來的**，而且每一個都附一個負向對照：同一位元在
+**沒有**該硬 IP 的設計（`leds.asc`）中必須讀到 `0`。少了這個對照，「位元是 1」可能
+只是因為它恆為 1。
+
+**LEDDA 標為未判定，而非「無條件啟用」**：公開設定裡它**沒有任何啟用位元**，所以
+無法從 configuration 判斷它是否在驅動 fabric。這是關於矽的問題，本盤點回答不了；
+在拿到判定之前不替它建立 identity。另注意 **I2C 與 LEDDA 共用 ipcon tile (0,29)**，
+而 `CLKHF_FABRIC` 又落在 LEDDA 所在的 (0,28) —— **ownership 必須解析 `slf_op` 索引，
+永遠不能按 tile 歸屬**。
+
+**`lutff_N/cout` identity（`make carry-check`）**：`cout` 是 logic cell 的第二個實體
+輸出，原本的 driver pattern 只比對 `out`/`lout`，因此漏掉。它**必須以 CarryEnable
+（seq bit 0）為閘門**：`cout -> in_3` 是可程式化路由，突變可以把 carry 關閉的 cell 的
+`cout` 段落拉進圖中，無條件的 regex 會**憑空發明一個 driver**。
+
+加上它**不改變任何結果，而且可證明**，證明是逐一數出來的，不是抽查：
+
+| 性質 | 值 |
+|---|---|
+| 檢查的 logic tile | 660 |
+| `cout` 作為 routing 來源的次數 | 4,620（每個 tile 恰好 7，無例外） |
+| `cout` 作為 routing 目的端 | 0 |
+| `in_3` 作為 routing 來源 | 0 |
+| `in_3` mux 總數 | 5,280（每 tile 8） |
+| 來源數不等於 16 的 mux | 0 |
+| 位元群組不一致的 mux | 0 |
+| 可同時成立的來源 pair | 0 |
+
+所以**含 `cout` 的網路不可能含第二個來源** —— 要求「`cout` 參與的具名多來源案例」是
+無法滿足的，因為這種案例不存在且證明不可能存在。`make carry-check` 釘的是這個結構
+論證本身。
+
+**回歸的驗收方式也一併修正**：先前它只讀封存的 JSONL 數出 14／2,471，那**不構成
+「陽性集合不變」**——即使當前模型把每個陽性都搬到別的座標，這種檢查照樣通過。現在
+它用當前模型**重算**陽性座標，與封存的掃描結果做**雙向差集**，兩個方向都必須是空的。
+
+### 振盪器的第二個輸出：fabric 直出端點（2026-08-24）
+
+`extra_cells_db` 揭露 HFOSC 與 LFOSC 各有**兩個**輸出：全域網路，以及一條直接進入
+fabric 的段落 —— **`CLKHF_FABRIC` = `(0,28,'slf_op_7')`**、**`CLKLF_FABRIC` =
+`(25,29,'slf_op_0')`**。模型原本只標註了全域那條，於是任何把訊號接到 fabric 端點所在
+網路上的突變，都會看到一個**沒有來源**的網路 —— 與 PLL global 完全同型的偽陰性。
+
+**nextpnr 從不選這條路徑**（即使把振盪器輸出當資料用，甚至加 `--no-promote-globals`，
+它仍然一律 promote 成全域），所以合成設計永遠測不到它。但 IceStorm 資料庫裡
+`slf_op_7 -> span` 的 routing entry **確實存在**，單一位元翻轉就能啟用。模型評估的是
+翻轉，不是 place-and-route 工具會產生的設計。
+
+兩條端點**與各自的全域路徑共用同一個 identity**（同一顆振盪器的兩條路徑；拆開會在
+兩路徑相遇處產生假陽性），這與 PLL 的 core/global 處理一致。座標一律由 db 推導，
+不寫死在腳本裡。
+
+**第二個具名陽性**（model 與全圖重建 oracle 皆判定，增量 +1）：
+
+| 翻轉 | 啟用的 route | 參與的來源 |
+|---|---|---|
+| `(0,28) B15[52]` 0→1 | `slf_op_7 -> sp4_r_v_b_15` | `("lutff",1,27,5,"comb")` + `("hfosc",19,31)` |
+
+需先預置 `(1,27) B11[51]`。**與其他 selector 基準不同**，這個預置**確實會啟用一條
+route**（`lutff_5/out -> sp4_v_b_26`）：fixture 裡沒有任何東西驅動 fabric 端點所能
+到達的目的端，driver 必須被放上去。因此這裡斷言的不是「route 集合 +0/−0」，而是
+**新增的 route 恰好等於那一條**、且衝突數仍為 0。
+
+**閘門與覆蓋邊界**：閘門仍是 `padin_glb_netwk` 位元，它說的是「振盪器在驅動它的全域
+網路」——一個**路由**事實。振盪器是否**在運轉**根本不是 configuration 事實：
+`CLKHFPU`／`CLKHFEN` 是 fabric 輸入而非設定位元，沒有任何位元組合能回答它。因此
+「啟用了振盪器但只用 fabric 輸出」的設計落在本標註之外；nextpnr 產不出這種設計，
+所以該情況記為**未判定**，而不是被排除。
+
 ## 3. Decode、readback 與獨立性
 
 公開的 Lattice 配置流程描述寫入 configuration SRAM、啟動以及 CDONE 檢查，
@@ -437,10 +530,14 @@ make verify-repro
 
 - 位元普查只涵蓋 logic tile，不是 IO/RAM/DSP/IP/global configuration 全晶片普查。
 - 「非全零 tile」是 ASC 資料特徵，不等同精確的設計使用性分析。
-- 全域 driver graph 的來源 whitelist 是 LUT `out/lout`、IO `D_IN_*`、RAM `RDATA_*`
-  及 UP5K DSP `mult/O_*`；前三類沿用 IceStorm `icebox_vlog -D` heuristic。PLL
-  pad/global、振盪器與其他 hard-IP output 尚未完整做 configuration-aware identity，
-  因此不能把這份 driver 集合外推成完整 UP5K 物理 driver map。
+- 全域 driver graph 的來源 whitelist 是 LUT `out/lout/cout`、IO `D_IN_*`、RAM
+  `RDATA_*` 及 UP5K DSP `mult/O_*`；前三類沿用 IceStorm `icebox_vlog -D` heuristic。
+  PLL（core/global）、SPRAM、振盪器（全域與 fabric 兩條輸出）已有 configuration-aware
+  identity；**I2C、SPI、LEDDA 已完成盤點但尚未建模**，RGBA 判定為不適用。因此仍不能
+  把這份 driver 集合外推成完整 UP5K 物理 driver map。
+- 振盪器 identity 的閘門是「它在驅動全域網路」這個路由事實，不是「它在運轉」——
+  後者由 fabric 輸入 `CLKHFPU`／`CLKHFEN` 決定，不存在對應的設定位元。
+- LEDDA 在公開設定裡沒有任何啟用位元，其啟用狀態**未判定**，因此未建立 identity。
 - driver graph 沒有類比電壓、強度與瞬態模型。
 - 未對每個 routing event 做完整功能可達性或可觀測性分析。
 - 只有一塊板，沒有跨晶片 robustness 實驗。

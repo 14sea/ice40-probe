@@ -32,14 +32,18 @@ conservative and more auditable than raw bit flipping?  See
 The quantitative results are relative to the installed Project IceStorm
 database. A "global multi-driver candidate" is a prediction from a split-aware
 configured-net graph, not a direct electrical measurement on silicon. Its
-driver whitelist covers LUT, IO-input, RAM-read, and UP5K DSP outputs, plus a
-three configuration-derived hard-IP sources: `make pll-check` exercises UP5K
-`SB_PLL40_2F_PAD` port A's global path and port B's core path, `make
-spram-check` one `SB_SPRAM256KA` read-data port, and `make osc-check` the
-HFOSC-driven global network.  Hard-IP coverage is therefore partial -- PLL port
-A's core path, the other PLL variants, the SPRAM write path and its other three
-instances, and the LFOSC global are not exercised, and the remaining hard IP
-(I2C, SPI, RGB drivers) is not modelled at all.
+driver whitelist covers LUT combinational, sequential and carry outputs,
+IO-input, RAM-read, and UP5K DSP outputs, plus configuration-derived hard-IP
+sources: `make pll-check` exercises UP5K `SB_PLL40_2F_PAD` port A's global path
+and port B's core path, `make spram-check` one `SB_SPRAM256KA` read-data port,
+and `make osc-check` the HFOSC-driven global network and both oscillators'
+direct fabric outputs.  Hard-IP coverage is therefore partial -- PLL port A's
+core path, the other PLL variants, the SPRAM write path and its other three
+instances, and the LFOSC global are not exercised.  `make hard-ip-inventory`
+surveys the rest: I2C (15 fabric endpoints), SPI (25) and LEDDA (4) drive the
+fabric and are not modelled yet; RGBA drives package pins only and is not
+applicable to the driver graph.  LEDDA has no enabling bit in the published
+configuration, so whether it is a source at all is recorded as undetermined.
 `glb_netwk_*` is never treated as a source; it is a distribution network.
 
 ## Requirements
@@ -113,6 +117,20 @@ file so the next resume appends cleanly.
   entire segment graph per flip, sharing no conflict logic with `exhaustive.py`
   (which it imports only to compare verdicts).  `glb_netwk_*` is treated as a
   distribution network, not a source.
+- `work/hard_ip_inventory.py`: the survey step run before any identity is
+  written.  `icebox.extra_cells_db` is the authority on where a hard IP meets
+  the fabric and on its enabling bits; the synthesised designs check that
+  database rather than standing in for it.  Reading a count off a design instead
+  is how this file first reported 19 SPI endpoints when the device has 25 -- the
+  fixture drove one chip select out of four.
+- `work/carry_check.py`: the gated `lutff_N/cout` identity, and the exact
+  enumeration -- 660 tiles, 4,620 carry sources, 5,280 `in_3` muxes -- that
+  proves adding it cannot change a verdict.  It also recomputes both fixtures'
+  positive coordinates and diffs them against the archived sweeps in both
+  directions.
+- `work/manifest.py`: writes the evidence manifest, and with `--check` fails
+  when it no longer describes the tracked tree.  `--self-test` proves that gate
+  fires; a guard that has never failed proves nothing.
 - `work/tile_coverage_check.py`: guards the enumeration itself.  Two defects
   here produced a clean-looking negative from an incomplete list -- the second
   concluded that `CLKHF_DIV` left no trace in the ASC, when it lives in the one
@@ -160,8 +178,9 @@ not security research, it does not analyse undocumented bitstream content, and
 it is not chip reverse engineering.  Where this project's own coverage is
 partial that is stated rather than glossed over: the sweeps enumerate only flips
 that enable a routing path in non-empty logic tiles, hard-IP coverage extends to
-one PLL configuration, one SPRAM instance and the HFOSC, and no claim here has
-ever been checked against silicon.
+one PLL configuration, one SPRAM instance and the two oscillators, three further
+blocks are surveyed but not modelled, and no claim here has ever been checked
+against silicon.
 
 ## Licence
 

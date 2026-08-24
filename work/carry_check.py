@@ -27,6 +27,7 @@ merely absent from these fixtures, it cannot be constructed.
 
 from __future__ import annotations
 
+from collections import Counter
 import json
 from pathlib import Path
 import re
@@ -36,7 +37,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
-from exhaustive import GlobalDriverGraph, tile_model  # noqa: E402
+from exhaustive import GlobalDriverGraph, analyse, tile_model  # noqa: E402
 from iceutil import configuration_tiles, load_icebox, signed_tile_bits  # noqa: E402
 
 COUT = re.compile(r"lutff_([0-7])/cout").fullmatch
@@ -115,47 +116,107 @@ def main() -> int:
     )
 
     print("\n=== why no multi-source case involving carry can exist ===")
+    # Exact counts, over every logic tile and every in_3 mux.  Spot-checking one
+    # mux would leave the argument resting on the assumption that the rest look
+    # the same -- and an incomplete enumeration producing a clean negative is
+    # the failure mode this project has already hit twice.
     _icebox2, clean = load("leds.asc")
-    destinations, as_destination, tiles = set(), 0, 0
+    tiles = cout_as_source = cout_as_destination = cout_to_other = 0
+    in_3_as_source = 0
+    cout_entries_per_tile = Counter()
+    in_3_muxes = wrong_source_count = inconsistent_bit_group = 0
+    jointly_satisfiable = 0
     for _collection, (tile_x, tile_y), _tile in configuration_tiles(clean):
         if (tile_x, tile_y) not in clean.logic_tiles:
             continue
         tiles += 1
+        here = 0
         for candidate in clean.tile_db(tile_x, tile_y):
             if candidate[1] not in ("routing", "buffer"):
                 continue
             if COUT(str(candidate[2])):
-                destinations.add(bool(IN_3(str(candidate[3]))))
+                cout_as_source += 1
+                here += 1
+                if not IN_3(str(candidate[3])):
+                    cout_to_other += 1
             if COUT(str(candidate[3])):
-                as_destination += 1
-    print(f"  logic tiles examined: {tiles}")
-    check("carry out only ever routes to in_3", destinations == {True}, f"{destinations}")
-    check("carry out is never a routing destination", as_destination == 0)
-    _entries, muxes, _bits = tile_model(clean, 4, 27)
-    group = muxes["lutff_3/in_3"]
-    bit_groups = {
-        frozenset(name[1:] if name.startswith("!") else name for name in entry[0])
-        for entry in group
-    }
-    check(
-        "in_3's sources share one bit group, so they are mutually exclusive",
-        len(bit_groups) == 1,
-        f"{len(group)} sources, {len(bit_groups)} bit group(s)",
-    )
+                cout_as_destination += 1
+            if IN_3(str(candidate[2])):
+                in_3_as_source += 1
+        cout_entries_per_tile[here] += 1
+
+        _entries, muxes, _bits = tile_model(clean, tile_x, tile_y)
+        for destination, group in muxes.items():
+            if not IN_3(destination):
+                continue
+            in_3_muxes += 1
+            if len(group) != 16:
+                wrong_source_count += 1
+            bit_groups = {
+                frozenset(name[1:] if name.startswith("!") else name for name in entry[0])
+                for entry in group
+            }
+            if len(bit_groups) != 1:
+                inconsistent_bit_group += 1
+            for left_index, left in enumerate(group):
+                left_polarity = {
+                    name[1:] if name.startswith("!") else name: name.startswith("!")
+                    for name in left[0]
+                }
+                for right in group[left_index + 1 :]:
+                    right_polarity = {
+                        name[1:] if name.startswith("!") else name: name.startswith("!")
+                        for name in right[0]
+                    }
+                    if all(
+                        left_polarity[name] == right_polarity[name]
+                        for name in left_polarity.keys() & right_polarity.keys()
+                    ):
+                        jointly_satisfiable += 1
+
+    check("every logic tile was examined", tiles == 660, f"{tiles}")
+    check("carry out is a routing source 4,620 times",
+          cout_as_source == 4620, f"{cout_as_source}")
+    check("uniformly, seven entries in every tile",
+          dict(cout_entries_per_tile) == {7: 660}, f"{dict(cout_entries_per_tile)}")
+    check("carry out never routes anywhere but in_3",
+          cout_to_other == 0, f"{cout_to_other}")
+    check("carry out is never a routing destination",
+          cout_as_destination == 0, f"{cout_as_destination}")
+    check("in_3 is never a routing source",
+          in_3_as_source == 0, f"{in_3_as_source}")
+    check("every logic tile contributes eight in_3 muxes",
+          in_3_muxes == 5280, f"{in_3_muxes}")
+    check("each of them carries exactly sixteen sources",
+          wrong_source_count == 0, f"{wrong_source_count} mux(es) do not")
+    check("each of them decodes on a single bit group",
+          inconsistent_bit_group == 0, f"{inconsistent_bit_group} mux(es) do not")
+    check("so no two of an in_3 mux's sources can be selected at once",
+          jointly_satisfiable == 0, f"{jointly_satisfiable} satisfiable pair(s)")
     print(
         "  => a net containing cout cannot contain a second source, so adding\n"
         "     this identity provably cannot change any sweep result"
     )
 
-    print("\n=== the archived sweep results are unchanged ===")
+    print("\n=== the positive set is recomputed, not quoted ===")
     for fixture, expected, results in (
         ("leds.asc", 14, "oracle_leds_full.jsonl"),
         ("dense.asc", 2471, "oracle_dense_full.jsonl"),
     ):
-        _icebox3, current = load(fixture)
-        current_graph = GlobalDriverGraph(current, _icebox3)
+        icebox_here, current = load(fixture)
+        result = analyse(current, icebox_here)
         check(f"{fixture} baseline has no multi-driver net",
-              current_graph.base_multi_driver_nets == 0)
+              result.base_multi_driver_nets == 0)
+        # Two independent tallies of the same thing: the running counter, and
+        # the set of coordinates.  They can only agree if every positive was
+        # visited exactly once.
+        counted = result.count("global multi-driver net candidate")
+        coordinates = result.global_positives
+        check(f"{fixture}: the current model finds {expected} positives",
+              counted == expected, f"{counted}")
+        check(f"{fixture}: and {expected} distinct coordinates, one visit each",
+              len(coordinates) == expected, f"{len(coordinates)}")
+
         path = ROOT / "results" / results
         if not path.exists():
             print(f"  [skip] {results} not present; run the sweep to compare coordinates")
@@ -166,8 +227,16 @@ def main() -> int:
             if record.get("record") or not record["oracle"]:
                 continue
             archived.add((record["x"], record["y"], record["row"], record["column"]))
-        check(f"{fixture}: archived positive count is {expected}", len(archived) == expected,
-              f"{len(archived)}")
+        # Both directions.  Counting the archive alone would pass even if the
+        # current model had moved every positive somewhere else.
+        lost = sorted(archived - coordinates)
+        gained = sorted(coordinates - archived)
+        check(f"{fixture}: every archived positive is still found",
+              not lost, f"{len(lost)} lost: {lost[:3]}")
+        check(f"{fixture}: and the model invents none the archive lacks",
+              not gained, f"{len(gained)} new: {gained[:3]}")
+        check(f"{fixture}: archived positive count is {expected}",
+              len(archived) == expected, f"{len(archived)}")
 
     print()
     if failures:
