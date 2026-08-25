@@ -350,6 +350,18 @@ class GlobalDriverGraph:
         )
         self.i2c_sources = i2c_driver_state(ic, icebox)
         self.i2c_undetermined = i2c_undetermined(ic, icebox)
+        if self.i2c_undetermined:
+            # Recording "undetermined" and then answering anyway would render
+            # the unknown as safe: the graph would simply carry fifteen fewer
+            # drivers and report a clean baseline.  A verdict is refused
+            # instead.  This cannot fire on a design nextpnr produced, and no
+            # sweep here can reach the bits -- they are in IO tiles.
+            raise RuntimeError(
+                "SB_I2C instance(s) "
+                f"{self.i2c_undetermined} have only some of their enable bits "
+                "set; the configuration does not say whether the block drives "
+                "the fabric, so no driver verdict is produced"
+            )
         # Two hard IPs annotating one segment would mean one of the two
         # derivations is wrong about ownership, and whichever were consulted
         # first would silently win.  (0,29) and (25,29) each host outputs of
@@ -863,8 +875,9 @@ def main() -> int:
                     )
     print(
         "\nDriver boundary: LUT comb/seq/carry, IO-input, RAM-read, UP5K-DSP, PLL, "
-        "SPRAM and oscillator (global and fabric) outputs; I2C, SPI and LEDDA are "
-        "surveyed but not modelled, and hard-IP coverage is not complete."
+        "SPRAM, oscillator (global and fabric) and SB_I2C outputs; SPI and "
+        "LEDDA are surveyed but not modelled, and hard-IP coverage is not "
+        "complete."
     )
     print(
         "Model boundary: database structure + IceStorm global net graph; "

@@ -181,9 +181,10 @@ not security research, it does not analyse undocumented bitstream content, and
 it is not chip reverse engineering.  Where this project's own coverage is
 partial that is stated rather than glossed over: the sweeps enumerate only flips
 that enable a routing path in non-empty logic tiles, hard-IP coverage extends to
-one PLL configuration, one SPRAM instance and the two oscillators, three further
-blocks are surveyed but not modelled, and no claim here has ever been checked
-against silicon.
+one PLL configuration, one SPRAM instance, the two oscillators and both SB_I2C
+instances, two further blocks (SPI and LEDDA) are surveyed but not modelled,
+RGBA is not applicable to the driver graph, and no claim here has ever been
+checked against silicon.
 
 ## Licence
 
@@ -202,7 +203,7 @@ SHA-256 of both model sources, so a stale file cannot silently be resumed after
 the model changes.
 
 What *is* tracked is `docs/evidence_manifest.md` (`make manifest`), which
-re-runs the three hard-IP fixture checks and records, for every sweep, the
+re-runs the four hard-IP fixture checks and records, for every sweep, the
 SHA-256 of the file, the hashes it was produced against, the counts, and the
 coordinates of every oracle positive.  `results/archive/*.jsonl.gz`
 (`make archive`) is tracked too: the sweeps compress about forty-fold, so the

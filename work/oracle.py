@@ -18,10 +18,11 @@ That is a claim about the silicon, not about either implementation, so it is
 not independently tested here.
 
 `glb_netwk_*` is deliberately NOT treated as a driver: it is a distribution
-network, not a source.  When configuration connects a PLL output to one, the
-PLL identity is annotated on that passive endpoint.  Oscillators and other
-hard-IP sources are not modelled yet -- see the coverage note printed at the
-end of a run.
+network, not a source.  When configuration connects a PLL or oscillator output
+to one, that block's identity is annotated on the passive endpoint.  PLL,
+SPRAM, both oscillators (global and direct fabric outputs) and both SB_I2C
+instances are modelled; SPI, LEDDA and the RGB drivers are not -- see the
+coverage note printed at the end of a run.
 
 The full adds-only sweep over `leds` is ~49k rebuilds, so runs are resumable:
 every checked flip is appended to a JSONL result file that also records the ASC
@@ -470,6 +471,14 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
 def conflicting_nets(ic, icebox) -> int:
     """Rebuild the whole graph and count nets carrying more than one source."""
     total = 0
+    undetermined = i2c_undetermined(ic, icebox)
+    if undetermined:
+        # See exhaustive.GlobalDriverGraph: counting conflicts while an
+        # instance's enable state is unknown would report the unknown as zero.
+        raise RuntimeError(
+            f"SB_I2C instance(s) {undetermined} have only some of their enable "
+            "bits set; no conflict count is produced"
+        )
     # Decoded once per call, not once per segment: the configuration does not
     # change while the graph is being walked, and re-deriving the hard-IP state
     # for every segment costs the same answer several hundred thousand times.
@@ -743,9 +752,10 @@ def main() -> int:
     ):
         print(f"  tile=({record['x']},{record['y']}) bit=B{record['row']}[{record['column']}]")
     print(
-        "\nDriver identities: LUT/IO-input/RAM-read/UP5K-DSP/PLL/SPRAM outputs. "
-        "glb_netwk_* is a distribution network and is not counted as a source; "
-        "other hard-IP outputs remain outside this oracle's coverage."
+        "\nDriver identities: LUT/IO-input/RAM-read/UP5K-DSP/PLL/SPRAM/oscillator"
+        "/SB_I2C outputs.  glb_netwk_* is a distribution network and is not "
+        "counted as a source; SPI, LEDDA and the RGB drivers remain outside "
+        "this oracle's coverage."
     )
     return 1 if disagreements else 0
 

@@ -163,8 +163,10 @@ database 與同一組 driver identity 假設之下。**不能外推成「矽上�
 
 **仍未涵蓋**：driver whitelist 以外的硬 IP（SPI、LEDDA、RGB 驅動器；PLL、oscillator
 與 I2C 已有專屬 fixture，見上文，但覆蓋仍是部分的）。**更根本的是**：model 與 oracle 共用
-同一個 IceStorm database，兩者一致**不能排除資料庫本身的錯誤** —— `CLKHF_DIV` 完全
-不進 ASC 正是資料庫仍有已知缺口的證據。矽上從未做過任何爭用量測。
+同一個 IceStorm database，兩者一致**只代表內部結構一致，不能排除資料庫本身的錯誤**。
+（此處原本引「`CLKHF_DIV` 完全不進 ASC」當作資料庫缺口的例子 —— **那個說法已於
+2026-08-23 撤回**，該除頻值就編碼在 `dsp1_tile (0,16)`，錯的是我當初的 tile 列舉，
+不是資料庫；見後文「⚠ 2026-08-23 撤回的錯誤結論」。）矽上從未做過任何爭用量測。
 
 ### 硬 IP：PLL fixture 與由設定推導的 driver identity（2026-08-22）
 
@@ -460,13 +462,28 @@ oracle 全掃（本專案的 sweep machinery 只走 logic tile），所以這裡
 這一個端點的 identity、重建整張圖，同一個翻轉就被判為乾淨；其餘 29 個端點的 identity
 不受影響。斷言「identity 存在」不能證明它就是決定判決的東西。
 
-**未判定的部分，明講不猜**：兩個 `I2C_ENABLE` 位元**個別**代表什麼，公開資料沒有說，
-這個 fixture 也回答不了（nextpnr 永遠成對寫入）。因此「恰好只設一個」的設定由
-`i2c_undetermined()` 報成 **UNDETERMINED**，並且**不給 identity**：當成啟用會憑空發明
-15 個 driver，當成停用會藏起 15 個 driver。回歸同時釘住三種狀態（兩個都設＝on、兩個都
-清＝off 且不算 undetermined、只清一個＝undetermined 且無 identity），model 與 oracle
-各自獨立推導、答案一致。另外釘住的一點是：這兩個位元都在 **IO tile**，落在本專案所有
-sweep 的 logic-tile 範圍之外，所以沒有任何 sweep 能碰到它們。
+**未判定的部分，明講不猜，而且不准它變成判決**：兩個 `I2C_ENABLE` 位元**個別**代表
+什麼，公開資料沒有說，這個 fixture 也回答不了（nextpnr 永遠成對寫入）。因此「恰好只設
+一個」的設定由 `i2c_undetermined()` 報成 **UNDETERMINED**，並且**不給 identity**：
+當成啟用會憑空發明 15 個 driver，當成停用會藏起 15 個 driver。
+
+**⚠ 只「報告」是不夠的（2026-08-25 覆核抓到的漏洞）**：第一版把 undetermined 記下來
+之後照樣建圖、照樣回答，於是那 15 個 driver 只是安靜地不在圖裡，baseline 依舊是乾淨的
+0 —— **「未知」在判決層被算成「安全」**。現在 `GlobalDriverGraph` 建構與
+`oracle.conflicting_nets()` 遇到 mixed state 都直接 `RuntimeError`，**拒絕給出判決**。
+兩邊各有回歸，且用「把守衛拿掉就必須變紅」驗過有牙齒；另有鑑別性對照：**兩個位元都清
+＝off 是有答案的狀態，判決層照常運作**。這種設定不可能由 nextpnr 產生，而且兩個位元都在
+**IO tile**，落在本專案所有 sweep 的 logic-tile 範圍之外，所以沒有任何 sweep 碰得到。
+
+**歸屬守衛也補了鑑別力測試**：`GlobalDriverGraph` 對「兩個硬 IP 宣稱同一段落」會拋
+`RuntimeError`，但沒有任何 fixture 會同時啟用 I2C 與另一個重疊來源 —— 守衛從未被觸發過，
+拿掉它照樣全綠。現在在**振盪器 fixture**（LFOSC 啟用、擁有 `(25,29,slf_op_0)`）上**注入**
+一個 I2C 對同一段落的宣稱，釘住它必須拋出；同時斷言未注入時該 fixture 建得起來，
+確保紅的是注入而不是 fixture 本身。
+
+**另外釘住端點真的有進圖**：annotation 是從 db 推導的，拿 db 比對 db 不可能發現「某個
+輸出後來沒被繞線」。因此另外斷言 db 的 30 個端點**全部出現在 `ic.group_segments()`**
+裡 —— 少了這條，未來某個輸出被最佳化掉會讓 fixture 悄悄變空殼。
 
 **順帶的效能修正（不改任何結果）**：`oracle.conflicting_nets()` 原本對**每一個 segment**
 重新推導一次 PLL 以外的硬 IP 狀態；設定在走訪圖的過程中並不會改變，因此改成每次呼叫

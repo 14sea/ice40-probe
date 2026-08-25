@@ -120,6 +120,15 @@ def flip_delta(ic, x, y, bit_name):
     return additions, removals
 
 
+def raises(action) -> tuple[bool, str]:
+    """Run `action` and report whether it refused with a RuntimeError."""
+    try:
+        action()
+    except RuntimeError as error:
+        return True, str(error)
+    return False, ""
+
+
 def set_bit(ic, x, y, name, value) -> None:
     row, column = name[1:].rstrip("]").split("[")
     row, column = int(row), int(column)
@@ -190,6 +199,21 @@ def main() -> int:
         len(set(sources.values())) == 30,
         f"{len(set(sources.values()))} identities for {len(sources)} endpoints",
     )
+    present = {
+        segment
+        for group in ic.group_segments()
+        for segment in group
+        if "slf_op" in segment[2]
+    }
+    # The annotation is derived from the database, so comparing it with the
+    # database cannot notice an output that stopped being routed.  This looks
+    # at the design's own segment graph instead: an unrouted output would leave
+    # its identity unexercised and the fixture quietly hollow.
+    check(
+        "all thirty endpoints actually appear in the design's segment graph",
+        not (expected.keys() - present),
+        f"{sorted(expected.keys() - present)[:3]} missing of {len(present)} present",
+    )
     check(
         "no instance is in an undetermined enable state",
         not graph.i2c_undetermined,
@@ -220,6 +244,37 @@ def main() -> int:
         oracle.oscillator_driver_state(ic_osc, {}).get((25, 29, "slf_op_0"))
         == ("lfosc", 6, 31),
         "the two blocks are distinguished by index, and both annotations exist",
+    )
+
+    print("\n=== the overlap guard has to be able to fire ===")
+    # A guard no fixture can trigger proves nothing.  The oscillator fixture is
+    # the one configuration where another block owns a segment an I2C could
+    # plausibly be given, so the claim is injected there deliberately.
+    icebox_g, ic_g = load(OSC_ASC)
+    built, _message = raises(lambda: GlobalDriverGraph(ic_g, icebox_g))
+    check(
+        "the oscillator fixture builds cleanly on its own",
+        not built,
+        "so the failure below is caused by the injection, not by the fixture",
+    )
+    original_state = exhaustive.i2c_driver_state
+    contested = (25, 29, "slf_op_0")
+
+    def with_overlapping_claim(ic_arg, icebox_arg=None):
+        state = original_state(ic_arg, icebox_arg)
+        state[contested] = ("i2c", 25, 31, "INJECTED")
+        return state
+
+    exhaustive.i2c_driver_state = with_overlapping_claim
+    try:
+        icebox_o, ic_o = load(OSC_ASC)
+        fired, message = raises(lambda: GlobalDriverGraph(ic_o, icebox_o))
+    finally:
+        exhaustive.i2c_driver_state = original_state
+    check(
+        "an I2C claim on the LFOSC's fabric output is refused, not silently won",
+        fired and "slf_op_0" in message,
+        message or "no RuntimeError raised",
     )
 
     # --- known positives, one per instance ------------------------------------
@@ -409,6 +464,29 @@ def main() -> int:
         and len(mixed_sources) == 15,
         "claiming it drives would invent fifteen drivers; claiming it does not "
         "would hide them",
+    )
+    # Reporting the unknown is not enough.  If the graph still built and still
+    # answered, the unknown would reach the caller as "no conflict" -- fifteen
+    # drivers quietly absent from a clean-looking baseline.  Both verdict
+    # layers refuse.
+    fired, message = raises(lambda: GlobalDriverGraph(ic_mixed, icebox_mixed))
+    check(
+        "the model refuses to build a verdict on an undetermined instance",
+        fired and str(LEFT) in message,
+        message or "the graph was built and reported a baseline anyway",
+    )
+    fired, message = raises(lambda: conflicting_nets(ic_mixed, icebox_mixed))
+    check(
+        "and the oracle refuses to count conflicts on one",
+        fired and str(LEFT) in message,
+        message or "the oracle returned a count anyway",
+    )
+    # Discrimination: it is the mixed state that is refused, not any edit.
+    refused_off, _message = raises(lambda: GlobalDriverGraph(ic_off, icebox_off))
+    check(
+        "a fully disabled instance is still answerable",
+        not refused_off and conflicting_nets(ic_off, icebox_off) == 0,
+        "off is a determined answer, so the verdict layer still works",
     )
 
     print()
