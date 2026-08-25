@@ -39,7 +39,7 @@ from iceutil import (  # noqa: E402
     load_icebox,
 )
 
-FIXTURES = ("leds.asc", "dense.asc", "pll.asc", "spram.asc", "osc.asc")
+FIXTURES = ("leds.asc", "dense.asc", "pll.asc", "spram.asc", "osc.asc", "i2c.asc")
 
 failures: list[str] = []
 

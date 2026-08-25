@@ -390,7 +390,8 @@ def main() -> int:
         "global's fabout sits in io "
         "tile (12,0), which package sg48 does not bond out, so no LUT output can "
         "be brought to that mux and no second source can be constructed there.  "
-        "The remaining hard IP (I2C, SPI, RGB drivers) is still unmodelled."
+        "SB_I2C has its own fixture (make i2c-check); SPI, LEDDA and the RGB "
+        "drivers are still unmodelled."
     )
     return 0
 

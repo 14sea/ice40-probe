@@ -43,6 +43,7 @@ FIXTURE_CHECKS = (
     ("pll", "pll_check.py", "pll.asc"),
     ("spram", "spram_check.py", "spram.asc"),
     ("oscillator", "osc_check.py", "osc.asc"),
+    ("i2c", "i2c_check.py", "i2c.asc"),
 )
 
 TRACKED_ASCS = (
@@ -56,6 +57,7 @@ TRACKED_ASCS = (
     "osc.asc",
     "osc_selector.asc",
     "osc_fabric_selector.asc",
+    "i2c.asc",
 )
 
 

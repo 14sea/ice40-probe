@@ -141,6 +141,110 @@ def spram_driver_state(ic):
     return sources
 
 
+def i2c_cells(icebox):
+    """Every SB_I2C instance icebox knows about, as (placement, ports).
+
+    Both instances, from the database, never from a design: the UP5K has two,
+    and their configuration is not symmetric.  The left instance's two enabling
+    bits sit in different IO tiles ((13,31) and (12,31)); the right instance's
+    both sit in (19,31).  Reading the layout off one placed design is how this
+    project came to report 19 SPI fabric endpoints for a block that has 25.
+    """
+    return sorted(
+        (key[1], cell)
+        for key, cell in icebox.extra_cells_db["5k"].items()
+        if key[0] == "I2C"
+    )
+
+
+def i2c_enable_bits(cell):
+    """The instance's enabling IpConfig bits, as (x, y, bit-name)."""
+    return sorted(
+        (value[0], value[1], value[2])
+        for port, value in cell.items()
+        if str(port).startswith("I2C_ENABLE")
+    )
+
+
+def i2c_fabric_endpoints(cell):
+    """`segment -> port name` for the outputs that enter the fabric."""
+    return {
+        (value[0], value[1], value[2]): str(port)
+        for port, value in cell.items()
+        if isinstance(value, tuple)
+        and len(value) == 3
+        and str(value[2]).startswith("slf_op")
+    }
+
+
+def i2c_enable_states(ic, icebox):
+    """`placement -> "on" | "off" | "mixed"`, read from configuration."""
+    states = {}
+    for placement, cell in i2c_cells(icebox):
+        values = [
+            ipconfig_bit(ic, x, y, name) for x, y, name in i2c_enable_bits(cell)
+        ]
+        if values and all(value == "1" for value in values):
+            states[placement] = "on"
+        elif values and all(value == "0" for value in values):
+            states[placement] = "off"
+        else:
+            states[placement] = "mixed"
+    return states
+
+
+def i2c_driver_state(ic, icebox=None):
+    """Annotate the segments driven by an enabled SB_I2C.
+
+    Fifteen outputs per instance leave the hard IP through `slf_op_*` segments
+    on ipcon tiles, the same segment class as SPRAM read data and for the same
+    reason invisible to a `lutff_*/out` / `io_*/D_IN_*` / `ram/RDATA_*` /
+    `mult/O_*` whitelist.  Each output is its own physical driver, so each gets
+    its own identity, named by the port rather than by the segment index.
+
+    Ownership is resolved per port, never per tile.  Tile (0,29) carries seven
+    of the left instance's outputs and LEDDA's LEDDON; tile (25,29) carries
+    seven of the right instance's and the LFOSC's direct fabric output.  A
+    tile-level rule would claim both.
+
+    Gate and coverage boundary: the gate is the pair of `I2C_ENABLE` bits the
+    cell database names for that instance.  What those bits mean individually
+    is not a public fact, and this fixture cannot make it one: nextpnr sets
+    both together for a placed instance and neither otherwise, whether SCLI and
+    SDAI come from the dedicated pads or from fabric registers.  So a
+    configuration in which exactly one of them is set is reported as
+    UNDETERMINED by `i2c_undetermined()` and given no identity here -- claiming
+    the IP drives fifteen nets would invent drivers, and claiming it does not
+    would hide them.  Nothing produces that state today: both bits live in IO
+    tiles, outside the logic-tile scope of every sweep in this project.
+    """
+    if icebox is None:
+        icebox = load_icebox()
+    sources = {}
+    states = i2c_enable_states(ic, icebox)
+    for placement, cell in i2c_cells(icebox):
+        if states[placement] != "on":
+            continue
+        x, y, _z = placement
+        for segment, port in i2c_fabric_endpoints(cell).items():
+            sources[segment] = ("i2c", x, y, port)
+    return sources
+
+
+def i2c_undetermined(ic, icebox=None):
+    """Instances whose enabling bits disagree with each other.
+
+    Reported rather than resolved.  See `i2c_driver_state`.
+    """
+    if icebox is None:
+        icebox = load_icebox()
+    return sorted(
+        placement
+        for placement, state in i2c_enable_states(ic, icebox).items()
+        if state == "mixed"
+    )
+
+
 # padin index -> on-chip oscillator, established by placing each oscillator
 # alone: HFOSC alone sets padin_glb_netwk 4, LFOSC alone sets 5.
 OSCILLATOR_PADIN = {4: "hfosc", 5: "lfosc"}
@@ -244,6 +348,22 @@ class GlobalDriverGraph:
         self.oscillator_sources = oscillator_driver_state(
             ic, self.pll_sources, self.icebox
         )
+        self.i2c_sources = i2c_driver_state(ic, icebox)
+        self.i2c_undetermined = i2c_undetermined(ic, icebox)
+        # Two hard IPs annotating one segment would mean one of the two
+        # derivations is wrong about ownership, and whichever were consulted
+        # first would silently win.  (0,29) and (25,29) each host outputs of
+        # two different blocks, so this is not hypothetical.
+        for name, other in (
+            ("PLL", self.pll_sources),
+            ("SPRAM", self.spram_sources),
+            ("oscillator", self.oscillator_sources),
+        ):
+            clash = self.i2c_sources.keys() & other.keys()
+            if clash:
+                raise RuntimeError(
+                    f"I2C and {name} both claim {sorted(clash)}"
+                )
         seeds = set()
         enabled_edges = []
         assert_tile_coverage(ic)
@@ -350,6 +470,9 @@ class GlobalDriverGraph:
         oscillator = self.oscillator_sources.get(segment)
         if oscillator is not None:
             return oscillator
+        i2c = self.i2c_sources.get(segment)
+        if i2c is not None:
+            return i2c
         lut = LUT_DRIVER(name)
         if lut and (x, y) in self.ic.logic_tiles:
             index = int(lut.group(1))

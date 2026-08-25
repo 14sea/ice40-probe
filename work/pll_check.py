@@ -296,8 +296,9 @@ def main() -> int:
         "Port A core and the other PLL variants are not exercised; icebox_vlog "
         "names a PAD-型 PLL's port A core output io_N/PAD while this model "
         "annotates io_N/D_IN_0. SPRAM and the on-chip oscillators have their own "
-        "fixtures (make spram-check, make osc-check); the remaining hard IP -- "
-        "I2C, SPI and the RGB drivers -- is not modelled."
+        "fixtures (make spram-check, make osc-check), as does SB_I2C "
+        "(make i2c-check); the remaining hard IP -- SPI, LEDDA and the RGB "
+        "drivers -- is not modelled."
     )
     return 0
 

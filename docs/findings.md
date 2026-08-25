@@ -161,8 +161,8 @@ oracle 完全一致。
 **「偽陰性已關閉」的正確範圍**：指增量模型相對於**全圖重建**沒有偽陰性，且是在同一份
 database 與同一組 driver identity 假設之下。**不能外推成「矽上沒有偽陰性」。**
 
-**仍未涵蓋**：driver whitelist 以外的硬 IP（I2C、SPI、RGB 驅動器；PLL 與 oscillator
-已有專屬 fixture，見上文，但覆蓋仍是部分的）。**更根本的是**：model 與 oracle 共用
+**仍未涵蓋**：driver whitelist 以外的硬 IP（SPI、LEDDA、RGB 驅動器；PLL、oscillator
+與 I2C 已有專屬 fixture，見上文，但覆蓋仍是部分的）。**更根本的是**：model 與 oracle 共用
 同一個 IceStorm database，兩者一致**不能排除資料庫本身的錯誤** —— `CLKHF_DIV` 完全
 不進 ASC 正是資料庫仍有已知缺口的證據。矽上從未做過任何爭用量測。
 
@@ -290,7 +290,8 @@ driver，這個陽性就構造不出來。
 
 **覆蓋邊界（必須照這樣引用）**：只驗過 **HFOSC**。LFOSC 的全域對應的 `fabout` 位於
 io tile `(12,0)`，而 **sg48 封裝沒有把該 tile 的任何 block 接出來**，因此無法把 LUT
-輸出帶到那顆 mux，也就構造不出第二個來源 —— 這是封裝限制，不是模型缺陷。其餘硬 IP（I2C、SPI、RGB 驅動器）仍未建模。
+輸出帶到那顆 mux，也就構造不出第二個來源 —— 這是封裝限制，不是模型缺陷。I2C 已於
+2026-08-25 建立 identity（見下文）；其餘硬 IP（SPI、LEDDA、RGB 驅動器）仍未建模。
 
 **⚠ 一項已撤回的錯誤結論**：本文件先前寫過「`CLKHF_DIV` 在 ASC 裡完全沒有表示」。
 **那是錯的。** 它編碼在 **`dsp1_tile (0,16)` 的兩個 IpConfig 位元**（`CBIT_3` = 低位
@@ -315,7 +316,7 @@ io tile `(12,0)`，而 **sg48 封裝沒有把該 tile 的任何 block 接出來*
 
 | 硬 IP | 放置 | fabric 端點（`slf_op`） | 啟用位元 | 判定 |
 |---|---|---|---|---|
-| `SB_I2C` | X0/Y31 | **15** @ (0,29),(0,30) | `I2C_ENABLE_0/1` @ (13,31)/(12,31) | 值得建 fixture |
+| `SB_I2C` | X0/Y31 | **15** @ (0,29),(0,30) | `I2C_ENABLE_0/1` @ (13,31)/(12,31) | 值得建 fixture → **已建，見下文（2026-08-25）** |
 | `SB_SPI` | X0/Y0 | **25** @ (0,19)–(0,22) | `SPI_ENABLE_0..3` @ (7,0)/(6,0) | 值得建 fixture |
 | `SB_LEDDA_IP` | X0/Y31 | **4** @ (0,28),(0,29) | **無** | 值得建 fixture；啟用狀態**未判定** |
 | `SB_RGBA_DRV` | X0/Y30 | **0** | `RGBA_DRV_EN` @ (0,28) `CBIT_5` | **不適用於 driver graph** |
@@ -400,6 +401,81 @@ route**（`lutff_5/out -> sp4_v_b_26`）：fixture 裡沒有任何東西驅動 f
 `CLKHFPU`／`CLKHFEN` 是 fabric 輸入而非設定位元，沒有任何位元組合能回答它。因此
 「啟用了振盪器但只用 fabric 輸出」的設計落在本標註之外；nextpnr 產不出這種設計，
 所以該情況記為**未判定**，而不是被排除。
+
+### 硬 IP：I2C identity（2026-08-25）
+
+盤點之後的第一個 fixture（`work/i2c.v`／`work/i2c_check.py`，`make i2c-check`，已進
+`make test` 與 `verify-repro`）。缺口與 SPRAM 同型：每個 `SB_I2C` 有 **15 個輸出**經
+ipcon tile 的 `slf_op_*` 進入 fabric，而 `lutff_*/out`／`io_*/D_IN_*`／`ram/RDATA_*`／
+`mult/O_*` 這組 whitelist 一個都比對不到 —— 於是 I2C 的每一條輸出網路都是「沒有來源」
+的網路，任何把第二個 driver 接上去的突變都不會被判為衝突。
+
+**兩個 instance 都放**，因為它們在設定上不對稱：左邊 instance 的兩個啟用位元分屬
+**兩個** IO tile（`(13,31)` 的 `cbit2usealt_in_0` 與 `(12,31)` 的 `cbit2usealt_in_1`），
+右邊的兩個都在 `(19,31)`。只放一個 instance 的 fixture 會漏掉一半的佈局 —— 正是把 SPI
+數成 19 個端點的那種失效。選哪一個 instance 不是靠放置約束，而是靠 `BUS_ADDR74`：
+`"0b0001"` 只能是 i2c_0，`"0b0011"` 只能是 i2c_1。
+
+**量到的，不是假設的**：
+
+* 端點與啟用位元一律取自 `icebox.extra_cells_db`，合成設計只用來**驗證**那份 db；
+  驗收是與 db 的端點集合做**雙向**比對（30 個，兩個方向差集皆空）。
+* 啟用位元在編出來的設計裡是 `1`，在 `leds.asc` 裡是 `0`。少了後半，「位元是 1」也
+  可能只代表它恆為 1。
+* **不管 SCLI/SDAI 來自專用腳位還是 fabric 暫存器，nextpnr 都會把兩個位元一起設起來**
+  （兩種設計各建一次比對過）。所以這兩個位元標記的是「這個 instance 被啟用」，
+  不是「專用腳位被 mux 到 IP」。本 fixture 刻意用 fabric 暫存器驅動 SCLI/SDAI，讓這
+  兩件事在證據裡不會混在一起。
+
+**identity 粒度**：每個輸出 port 各自一個 identity（`("i2c", x, y, port)`），30 個端點
+30 個相異 identity —— 它們是 15 個相異的實體輸出，不是同一個來源的多條路徑（PLL 的
+core/global 才是後者）。
+
+**ownership 一律解析 port，永不按 tile**：`(0,29)` 同時載著 I2C 的七個輸出與 LEDDA 的
+`LEDDON`（`slf_op_0`）；`(25,29)` 同時載著右邊 I2C 的七個輸出與 **LFOSC 的 fabric 直出
+端點**（同樣是 `slf_op_0`）。按 tile 歸屬會把兩者都判給 I2C。這件事有專門的回歸：那兩個
+`slf_op_0` 不在 I2C 的來源集合裡，而在振盪器 fixture 裡 `(25,29,slf_op_0)` 確實屬於
+`("lfosc", 6, 31)`。模型另外在建圖時直接對 PLL／SPRAM／振盪器做端點交集檢查，有重疊就
+`RuntimeError`，不讓「先查到誰算誰」悄悄決定歸屬。
+
+**兩個具名陽性**（每個 instance 一個；model 與全圖重建 oracle 皆判定，增量 +1）：
+
+| 翻轉 | 啟用的 route | 參與的來源 |
+|---|---|---|
+| `(0,30) B1[52]` 0→1 | `slf_op_0 -> sp4_r_v_b_1` | `("i2c",0,31,"SBDATO2")` + `("lutff",15,30,4,"out")` |
+| `(25,29) B3[48]` 0→1 | `slf_op_1 -> sp4_v_b_18` | `("i2c",25,31,"SDAO")` + `("lutff",15,30,0,"out")` |
+
+與振盪器 fabric 端點不同，這兩個**都不需要預先生成 selector 基準**：fixture 本身已經把
+LUT 輸出送到這些 mux 能到達的 span 上，第二個來源本來就在那裡。
+
+**具名兩個不夠，所以整個類別都窮舉了**：在四個 I2C 輸出 tile 裡，「單一位元 0→1、恰好
+新增一條 route、不移除任何 route、且來源是 I2C 端點」的翻轉，模型判為衝突的共 **23 個**
+（`(0,29)` 1、`(0,30)` 12、`(25,29)` 2、`(25,30)` 8），**全圖重建 oracle 逐一確認，
+每一個都是 +1，零歧異**；兩個具名陽性都在這個集合裡。抽兩個樣本沒有檢定力，這個類別
+小到可以窮舉，就窮舉。**未涵蓋的方向**：同樣那些 tile 裡模型判為「乾淨」的翻轉沒有被
+oracle 全掃（本專案的 sweep machinery 只走 logic tile），所以這裡關掉的是偽陽性方向，
+不是偽陰性方向。
+
+**反事實有真的跑**：把 `exhaustive.i2c_driver_state` 換掉、只抽掉 `(0,30,slf_op_0)`
+這一個端點的 identity、重建整張圖，同一個翻轉就被判為乾淨；其餘 29 個端點的 identity
+不受影響。斷言「identity 存在」不能證明它就是決定判決的東西。
+
+**未判定的部分，明講不猜**：兩個 `I2C_ENABLE` 位元**個別**代表什麼，公開資料沒有說，
+這個 fixture 也回答不了（nextpnr 永遠成對寫入）。因此「恰好只設一個」的設定由
+`i2c_undetermined()` 報成 **UNDETERMINED**，並且**不給 identity**：當成啟用會憑空發明
+15 個 driver，當成停用會藏起 15 個 driver。回歸同時釘住三種狀態（兩個都設＝on、兩個都
+清＝off 且不算 undetermined、只清一個＝undetermined 且無 identity），model 與 oracle
+各自獨立推導、答案一致。另外釘住的一點是：這兩個位元都在 **IO tile**，落在本專案所有
+sweep 的 logic-tile 範圍之外，所以沒有任何 sweep 能碰到它們。
+
+**順帶的效能修正（不改任何結果）**：`oracle.conflicting_nets()` 原本對**每一個 segment**
+重新推導一次 PLL 以外的硬 IP 狀態；設定在走訪圖的過程中並不會改變，因此改成每次呼叫
+只推導一次。答案逐位元相同，`check-analysis` 的七個釘死數字與封存掃描的雙向差集回歸
+都不受影響（`leds`／`dense` 不含任何硬 IP，I2C identity 對它們是可證明的 no-op）。
+
+**覆蓋邊界（照這樣引用）**：只涵蓋兩個 `SB_I2C` instance 的 **15 個 fabric 輸出**，
+閘門是 db 指名的那組啟用位元。IP 的輸入、暫存器語意、以及單一啟用位元的意義都在邊界
+之外。SPI、LEDDA 與 RGB 驅動器仍未建模。
 
 ## 3. Decode、readback 與獨立性
 
@@ -532,12 +608,16 @@ make verify-repro
 - 「非全零 tile」是 ASC 資料特徵，不等同精確的設計使用性分析。
 - 全域 driver graph 的來源 whitelist 是 LUT `out/lout/cout`、IO `D_IN_*`、RAM
   `RDATA_*` 及 UP5K DSP `mult/O_*`；前三類沿用 IceStorm `icebox_vlog -D` heuristic。
-  PLL（core/global）、SPRAM、振盪器（全域與 fabric 兩條輸出）已有 configuration-aware
-  identity；**I2C、SPI、LEDDA 已完成盤點但尚未建模**，RGBA 判定為不適用。因此仍不能
-  把這份 driver 集合外推成完整 UP5K 物理 driver map。
+  PLL（core/global）、SPRAM、振盪器（全域與 fabric 兩條輸出）與 I2C（兩個 instance
+  各 15 個 fabric 輸出）已有 configuration-aware identity；**SPI、LEDDA 已完成盤點但
+  尚未建模**，RGBA 判定為不適用。因此仍不能把這份 driver 集合外推成完整 UP5K 物理
+  driver map。
 - 振盪器 identity 的閘門是「它在驅動全域網路」這個路由事實，不是「它在運轉」——
   後者由 fabric 輸入 `CLKHFPU`／`CLKHFEN` 決定，不存在對應的設定位元。
 - LEDDA 在公開設定裡沒有任何啟用位元，其啟用狀態**未判定**，因此未建立 identity。
+- I2C 的兩個 `I2C_ENABLE` 位元**個別的語意未判定**：nextpnr 一律同時寫入兩個，公開
+  資料也沒有把它們分開。因此「恰好只設一個」的設定被明確報成 undetermined，不當成
+  啟用（會憑空發明 15 個 driver），也不當成停用（會藏起 15 個 driver）。
 - driver graph 沒有類比電壓、強度與瞬態模型。
 - 未對每個 routing event 做完整功能可達性或可觀測性分析。
 - 只有一塊板，沒有跨晶片 robustness 實驗。

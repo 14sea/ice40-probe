@@ -36,14 +36,17 @@ driver whitelist covers LUT combinational, sequential and carry outputs,
 IO-input, RAM-read, and UP5K DSP outputs, plus configuration-derived hard-IP
 sources: `make pll-check` exercises UP5K `SB_PLL40_2F_PAD` port A's global path
 and port B's core path, `make spram-check` one `SB_SPRAM256KA` read-data port,
-and `make osc-check` the HFOSC-driven global network and both oscillators'
-direct fabric outputs.  Hard-IP coverage is therefore partial -- PLL port A's
-core path, the other PLL variants, the SPRAM write path and its other three
-instances, and the LFOSC global are not exercised.  `make hard-ip-inventory`
-surveys the rest: I2C (15 fabric endpoints), SPI (25) and LEDDA (4) drive the
-fabric and are not modelled yet; RGBA drives package pins only and is not
-applicable to the driver graph.  LEDDA has no enabling bit in the published
-configuration, so whether it is a source at all is recorded as undetermined.
+`make osc-check` the HFOSC-driven global network and both oscillators'
+direct fabric outputs, and `make i2c-check` the fifteen fabric outputs of each
+of the two `SB_I2C` instances.  Hard-IP coverage is therefore partial -- PLL
+port A's core path, the other PLL variants, the SPRAM write path and its other
+three instances, and the LFOSC global are not exercised, and what either of the
+two `I2C_ENABLE` bits means on its own is recorded as undetermined rather than
+guessed.  `make hard-ip-inventory` surveys the rest: SPI (25 fabric endpoints)
+and LEDDA (4) drive the fabric and are not modelled yet; RGBA drives package
+pins only and is not applicable to the driver graph.  LEDDA has no enabling bit
+in the published configuration, so whether it is a source at all is recorded as
+undetermined.
 `glb_netwk_*` is never treated as a source; it is a distribution network.
 
 ## Requirements

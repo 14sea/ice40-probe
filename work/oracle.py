@@ -295,6 +295,68 @@ def spram_driver_state(ic):
     return sources
 
 
+def i2c_driver_state(ic, icebox=None):
+    """Annotate the segments driven by an enabled SB_I2C.
+
+    Derived here from the cell database independently of exhaustive.py, like
+    everything else in this file: it exists to disagree with the model, so it
+    must not import the model's answer.  Both instances are enumerated, each
+    output port is its own identity, and ownership is decided per port -- tiles
+    (0,29) and (25,29) each carry outputs of two different hard IPs.
+
+    The gate is that instance's full set of `I2C_ENABLE` bits.  A configuration
+    with only some of them set is not claimed either way here; see
+    `i2c_undetermined` and the note in exhaustive.py.
+    """
+    if icebox is None:
+        icebox = load_icebox()
+    sources = {}
+    for placement, cell in _i2c_cells(icebox):
+        if _i2c_enable_state(ic, cell) != "on":
+            continue
+        x, y, _z = placement
+        for port, value in cell.items():
+            if (
+                isinstance(value, tuple)
+                and len(value) == 3
+                and str(value[2]).startswith("slf_op")
+            ):
+                sources[(value[0], value[1], value[2])] = ("i2c", x, y, str(port))
+    return sources
+
+
+def i2c_undetermined(ic, icebox=None):
+    """Instances whose enabling bits disagree with each other."""
+    if icebox is None:
+        icebox = load_icebox()
+    return sorted(
+        placement
+        for placement, cell in _i2c_cells(icebox)
+        if _i2c_enable_state(ic, cell) == "mixed"
+    )
+
+
+def _i2c_cells(icebox):
+    return sorted(
+        (key[1], cell)
+        for key, cell in icebox.extra_cells_db["5k"].items()
+        if key[0] == "I2C"
+    )
+
+
+def _i2c_enable_state(ic, cell) -> str:
+    values = [
+        ipconfig_bit(ic, value[0], value[1], value[2])
+        for port, value in sorted(cell.items())
+        if str(port).startswith("I2C_ENABLE")
+    ]
+    if values and all(value == "1" for value in values):
+        return "on"
+    if values and all(value == "0" for value in values):
+        return "off"
+    return "mixed"
+
+
 # padin index -> on-chip oscillator, established by placing each oscillator
 # alone: HFOSC alone sets padin_glb_netwk 4, LFOSC alone sets 5.
 OSCILLATOR_PADIN = {4: "hfosc", 5: "lfosc"}
@@ -358,7 +420,8 @@ def oscillator_driver_state(ic, pll_sources, icebox=None):
 
 
 def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
-                    spram_sources=None, oscillator_sources=None):
+                    spram_sources=None, oscillator_sources=None,
+                    i2c_sources=None):
     x, y, name = segment
     if pll_sources is None or pll_blocks is None:
         pll_sources, pll_blocks = pll_driver_state(ic, icebox)
@@ -366,6 +429,8 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
         spram_sources = spram_driver_state(ic)
     if oscillator_sources is None:
         oscillator_sources = oscillator_driver_state(ic, pll_sources, icebox)
+    if i2c_sources is None:
+        i2c_sources = i2c_driver_state(ic, icebox)
     pll = pll_sources.get(segment)
     if pll is not None:
         return pll
@@ -375,6 +440,9 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
     oscillator = oscillator_sources.get(segment)
     if oscillator is not None:
         return oscillator
+    i2c = i2c_sources.get(segment)
+    if i2c is not None:
+        return i2c
     lut = LUT_DRIVER(name)
     if lut and (x, y) in ic.logic_tiles:
         index = int(lut.group(1))
@@ -402,10 +470,25 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
 def conflicting_nets(ic, icebox) -> int:
     """Rebuild the whole graph and count nets carrying more than one source."""
     total = 0
+    # Decoded once per call, not once per segment: the configuration does not
+    # change while the graph is being walked, and re-deriving the hard-IP state
+    # for every segment costs the same answer several hundred thousand times.
     pll_sources, pll_blocks = pll_driver_state(ic, icebox)
+    spram_sources = spram_driver_state(ic)
+    oscillator_sources = oscillator_driver_state(ic, pll_sources, icebox)
+    i2c_sources = i2c_driver_state(ic, icebox)
     for segments in ic.group_segments():
         identities = {
-            driver_identity(ic, icebox, segment, pll_sources, pll_blocks)
+            driver_identity(
+                ic,
+                icebox,
+                segment,
+                pll_sources,
+                pll_blocks,
+                spram_sources,
+                oscillator_sources,
+                i2c_sources,
+            )
             for segment in segments
         }
         identities.discard(None)
