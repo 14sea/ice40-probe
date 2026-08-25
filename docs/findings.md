@@ -603,10 +603,15 @@ LEDDA 已盤點但啟用狀態不是 configuration 事實，未建模；RGBA 無
 3. **block 必須真的存在且真的啟用**，否則否定是空的：`RGBA_DRV_EN`（`(0,28) CBIT_5`）
    從編出來的 bitstream 讀回是 `1`、在 `leds.asc` 是 `0`；`CURRENT_MODE` 與
    `RGB0_CURRENT` 也讀得回來（六個位元恰好一個為 1）。
-4. **三支腳確實是它自己的 pad**：db 的 `(4,31,0)/(5,31,0)/(6,31,0)` 經
-   `pinloc_db['5k-sg48']` 對應到封裝腳 **39/40/41**；nextpnr 三次明說
-   `not creating SB_IO`；在 fixture 裡那三個 tile **只剩 `glb_netwk_4`**（同樣三個 tile
-   在把腳位當普通 IO 用的 `leds` 裡有 19 個 segment、含 `io_0/D_OUT_0`）。
+4. **三支腳確實是它自己的 pad，而且這條鏈是閉合的**：`ports["RGB0/1/2"]` **就是**
+   `(4,31,0)/(5,31,0)/(6,31,0)`，而這三個 triple 經 `pinloc_db['5k-sg48']` **就是**封裝腳
+   **39/40/41** —— 兩端分開驗會讓中間自由（把 block 的 port 搬到別的 tile，兩半仍各自
+   成立），所以三者釘成同一組。nextpnr 的證據也不是數行數：從
+   `not creating SB_IO` 那三行**解析出 port 名稱與 instance 名稱**，要求集合恰為
+   `{RGB0,RGB1,RGB2}` 且都屬於本 fixture 的 `rgba`（只數三行的話，三條無關訊息也會通過）。
+   segment 集合也釘精確值：fixture 裡那三個 tile **恰好各只有一個 `glb_netwk_4`**；
+   同樣三個 tile 在把腳位當普通 IO 用的 `leds` 裡是 **19 個 segment，且三個 tile 各有
+   `io_0/D_OUT_0`**。
 5. **模型不是對 pad 一律視而不見**：同一個設計裡的時脈輸入腳 `(12,31) io_1/D_IN_0`
    **確實**拿到 `("io",12,31,...)` identity —— 所以 RGBA 三支腳的「沉默」是那些 pad 的
    性質，不是模型看不見 IO。
@@ -615,12 +620,21 @@ LEDDA 已盤點但啟用狀態不是 configuration 事實，未建模；RGBA 無
 
 **「不適用」與「未判定」是兩件事，這裡並排釘住**：RGBA **有啟用位元、沒有 fabric 輸出**
 → 它的狀態是 configuration 事實，而且沒有東西可驅動，是**確定的否定**；LEDDA 正好相反，
-**有 4 個 fabric 輸出、沒有任何啟用位元** → 無法從 configuration 判斷它是否在驅動，
-維持 **UNDETERMINED**、不建 identity。
+**有 4 個 fabric 輸出、16 個 fabric 輸入、沒有任何設定位元** → 無法從 configuration 判斷
+它是否在驅動，維持 **UNDETERMINED**、不建 identity。
 
-**鑑別力（實測過）**：給 RGBA 的 port 表塞進一個假的 `slf_op` 輸出 → 四條檢查同時變紅；
-把端點抽取改成永遠回空 → I2C/SPI/LEDDA 那三條立刻變紅，也就是說「RGBA 是 0」這個結論
-不可能由一個壞掉的搜尋矇混過關。
+**⚠ LEDDA 那一半原本是用名字猜的（覆核抓到）**：`rgba_check.py` 與
+`hard_ip_inventory.py` 都只搜尋 `ENABLE`／`_EN` 這兩個名稱 —— **注入一個叫 `POWERUP`
+的 CBIT，兩邊照樣全綠**。而 LEDDA 的事實其實比「沒有叫 ENABLE 的 port」更強：**它 20 個
+port 全部是 fabric segment，一個設定位元形狀的 port 都沒有**。兩處都改成**依資料形狀**
+判斷（`CBIT_*`／`cbit*`／`delay`），並各加一條鑑別力回歸：注入 `POWERUP: (0,29,"CBIT_9")`
+必須被抓出來。名稱比對只留給「讀回 db 已經指名的位元」，不再用來下否定結論。
+
+**鑑別力（六個反事實全部實測過）**：塞一個假的 `slf_op` 輸出進 RGBA 的 port 表 →
+四條檢查同時變紅；把端點抽取改成永遠回空 → I2C/SPI/LEDDA 那三條立刻變紅（「RGBA 是 0」
+不可能由壞掉的搜尋矇混過關）；把 `RGB0` 搬到別的 tile → pad 鏈那兩條變紅；把三行
+`not creating SB_IO` 換成無關訊息 → placer 證據那兩條變紅；給 LEDDA 加一個 `POWERUP`
+CBIT → 形狀檢查變紅；從 pad segment 集合裡拿掉一個 tile → 精確集合那條變紅。
 
 **覆蓋邊界**：這說的是**公開設定裡** `SB_RGBA_DRV` 沒有進入 fabric 的路徑，因此在這張圖
 裡不可能是來源。它不涉及該 block 的類比行為，而且仍是關於 IceStorm 資料庫的陳述 ——

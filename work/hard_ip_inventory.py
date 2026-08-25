@@ -65,9 +65,38 @@ def db_endpoints(cell: dict) -> set:
 
 
 def db_enable_bits(cell: dict) -> dict:
+    """The ports this block gates itself with, found by name.
+
+    Used only to *read back* bits whose names the database already states.
+    Never use it to conclude that a block has no gate: see
+    `db_configuration_ports`.
+    """
     return {
         port: value for port, value in cell.items()
         if "ENABLE" in port or port.endswith("_EN")
+    }
+
+
+def db_configuration_ports(cell: dict) -> dict:
+    """Every port that is a configuration bit, by data shape rather than name.
+
+    "No port called ENABLE" and "no configuration bit at all" are different
+    claims, and only the second supports leaving a block undetermined.  A gate
+    named POWERUP would satisfy the first and refute the conclusion, so the
+    shape of the database value decides: an IpConfig coordinate, not a segment
+    and not a package pin.
+    """
+    return {
+        port: value
+        for port, value in cell.items()
+        if isinstance(value, tuple)
+        and len(value) == 3
+        and isinstance(value[2], str)
+        and (
+            value[2].startswith("CBIT_")
+            or value[2].startswith("cbit")
+            or "delay" in value[2]
+        )
     }
 
 failures: list[str] = []
@@ -268,10 +297,29 @@ def main() -> int:
                 f"read {ipconfig_bit(baseline, x, y, bit)!r}",
             )
 
-    ledda_enables = db_enable_bits(cell_ports(icebox, "ledda"))
+    ledda_cell = cell_ports(icebox, "ledda")
+    ledda_config = db_configuration_ports(ledda_cell)
     check(
-        "ledda: the database states no enabling bit at all",
-        not ledda_enables, f"{sorted(ledda_enables)}",
+        "ledda: the database states no configuration bit at all",
+        not ledda_config, f"{sorted(ledda_config)}",
+    )
+    check(
+        "ledda: and that is by port shape, not by port name",
+        list(db_configuration_ports({**ledda_cell, "POWERUP": (0, 29, "CBIT_9")}))
+        == ["POWERUP"],
+        "a gate named anything at all would still be found",
+    )
+    check(
+        "ledda: every one of its twenty ports is a fabric segment",
+        len(ledda_cell) == 20
+        and all(
+            isinstance(value, tuple)
+            and len(value) == 3
+            and isinstance(value[2], str)
+            and not value[2].startswith("CBIT_")
+            for value in ledda_cell.values()
+        ),
+        f"{len(ledda_cell)} ports",
     )
     print(
         "  => UNDETERMINED, not 'always on': with no configuration bit there is\n"

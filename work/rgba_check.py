@@ -218,15 +218,36 @@ def main() -> int:
         str(entry[0]): (entry[1], entry[2], entry[3])
         for entry in icebox.pinloc_db["5k-sg48"]
     }
+    # The chain has to be closed: that RGB0/1/2 are these triples, that these
+    # triples are those package pins, and that the two are the same set.
+    # Checking the ends separately leaves the middle free -- moving the
+    # block's ports to another tile would keep both halves true.
+    rgba_pads = tuple(ports[f"RGB{index}"] for index in range(3))
     check(
-        "the database's pad triples are package pins 39, 40 and 41",
-        tuple(pinloc[pin] for pin in PAD_PINS) == PADS,
-        f"{[pinloc[pin] for pin in PAD_PINS]} vs {list(PADS)}",
+        "the block's own RGB0/1/2 ports are the three pad triples",
+        rgba_pads == PADS,
+        f"{list(rgba_pads)} vs {list(PADS)}",
     )
     check(
-        "nextpnr creates no SB_IO for any of the three",
-        log.count("not creating SB_IO") == 3,
-        f"{log.count('not creating SB_IO')} such lines",
+        "and those triples are package pins 39, 40 and 41",
+        tuple(pinloc[pin] for pin in PAD_PINS) == rgba_pads,
+        f"{[pinloc[pin] for pin in PAD_PINS]} vs {list(rgba_pads)}",
+    )
+    # Counting three lines would accept three unrelated messages, so the port
+    # names and the instance are parsed out of them.
+    no_sb_io = re.findall(
+        r"(\w+) use by \S+ (\w+), not creating SB_IO", log
+    )
+    check(
+        "nextpnr says it creates no SB_IO for exactly RGB0, RGB1 and RGB2",
+        {port for port, _instance in no_sb_io} == {"RGB0", "RGB1", "RGB2"},
+        f"{sorted({port for port, _i in no_sb_io})}",
+    )
+    check(
+        "and attributes all three to this fixture's SB_RGBA_DRV instance",
+        {instance for _port, instance in no_sb_io} == {"rgba"}
+        and len(no_sb_io) == 3,
+        f"{sorted({instance for _p, instance in no_sb_io})}, {len(no_sb_io)} lines",
     )
     graph = GlobalDriverGraph(ic, icebox)
     pad_tiles = {(x, y) for x, y, _block in PADS}
@@ -236,10 +257,12 @@ def main() -> int:
         for segment in group
         if (segment[0], segment[1]) in pad_tiles
     }
+    # The exact set, not just the set of names: comparing names alone passes
+    # with a tile missing entirely.
     check(
-        "their tiles carry nothing but the clock global",
-        {segment[2] for segment in pad_segments} == {"glb_netwk_4"},
-        f"{sorted({segment[2] for segment in pad_segments})}",
+        "their tiles carry exactly one segment each, the clock global",
+        pad_segments == {(x, y, "glb_netwk_4") for x, y, _block in PADS},
+        f"{sorted(pad_segments)}",
     )
     leds_pad_segments = {
         segment
@@ -248,10 +271,16 @@ def main() -> int:
         if (segment[0], segment[1]) in pad_tiles
     }
     check(
-        "while the same tiles carry IO structure when the pins are ordinary IO",
-        any("io_" in segment[2] for segment in leds_pad_segments)
-        and len(leds_pad_segments) > len(pad_segments),
+        "while the same three tiles carry nineteen segments as ordinary IO",
+        len(leds_pad_segments) == 19,
         f"leds: {len(leds_pad_segments)} segments, rgba: {len(pad_segments)}",
+    )
+    check(
+        "and each of the three has an output buffer there",
+        all(
+            (x, y, "io_0/D_OUT_0") in leds_pad_segments for x, y, _block in PADS
+        ),
+        f"{sorted(segment for segment in leds_pad_segments if 'io_' in segment[2])}",
     )
     check(
         "no pad segment resolves to a driver",
@@ -291,16 +320,43 @@ def main() -> int:
 
     print("\n=== not applicable, which is not the same as undetermined ===")
     ledda = cell(icebox, "LEDDA_IP", (0, 31, 2))
-    ledda_enables = [port for port in ledda if "ENABLE" in port or port.endswith("_EN")]
     check(
         "RGBA has an enabling bit and no fabric output",
         "RGBA_DRV_EN" in ports and not enable_gated_fabric_endpoints(ports),
         "its state is a configuration fact; there is simply nothing to drive",
     )
+    # By data shape, not by name.  "No port called ENABLE" is a much weaker
+    # statement than "no configuration bit at all", and a block whose gate was
+    # called POWERUP would satisfy the first while refuting the conclusion.
+    ledda_config = [
+        port
+        for port, value in ledda.items()
+        if classify(port, value) == "configuration bit"
+    ]
     check(
-        "LEDDA is the mirror image: four fabric outputs and no enabling bit",
-        len(enable_gated_fabric_endpoints(ledda)) == 4 and not ledda_enables,
-        "so LEDDA is undetermined, while RGBA is a determined negative",
+        "LEDDA is the mirror image: four fabric outputs, sixteen inputs",
+        len(enable_gated_fabric_endpoints(ledda)) == 4
+        and sum(
+            1 for port, value in ledda.items()
+            if classify(port, value) == "fabric input"
+        ) == 16,
+        f"{len(enable_gated_fabric_endpoints(ledda))} outputs",
+    )
+    check(
+        "and no configuration-shaped port whatever it might be named",
+        not ledda_config and len(ledda) == 20,
+        f"{ledda_config}",
+    )
+    injected = dict(ledda)
+    injected["POWERUP"] = (0, 29, "CBIT_9")
+    check(
+        "a differently-named gate would be caught by that shape check",
+        [
+            port
+            for port, value in injected.items()
+            if classify(port, value) == "configuration bit"
+        ] == ["POWERUP"],
+        "so the negative rests on the port shapes, not on the port names",
     )
 
     print()
