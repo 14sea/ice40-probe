@@ -324,7 +324,7 @@ io tile `(12,0)`，而 **sg48 封裝沒有把該 tile 的任何 block 接出來*
 | `SB_I2C` | X0/Y31 | **15** @ (0,29),(0,30) | `I2C_ENABLE_0/1` @ (13,31)/(12,31) | 值得建 fixture → **已建，見下文（2026-08-25）** |
 | `SB_SPI` | X0/Y0 | **25** @ (0,19)–(0,22) | `SPI_ENABLE_0..3` @ (7,0)/(6,0) | 值得建 fixture → **已建，見下文（2026-08-25）** |
 | `SB_LEDDA_IP` | X0/Y31 | **4** @ (0,28),(0,29) | **無** | 值得建 fixture；啟用狀態**未判定** |
-| `SB_RGBA_DRV` | X0/Y30 | **0** | `RGBA_DRV_EN` @ (0,28) `CBIT_5` | **不適用於 driver graph** |
+| `SB_RGBA_DRV` | X0/Y30 | **0** | `RGBA_DRV_EN` @ (0,28) `CBIT_5` | **不適用於 driver graph** → 負向回歸已建（2026-08-25） |
 
 **權威來源是 `icebox.extra_cells_db['5k']`，不是我們合成出來的設計。** 這份 db 直接
 給出每個硬 IP 的 port→segment 對應與啟用位元座標；合成設計的角色是**驗證這份 db**，
@@ -583,6 +583,48 @@ model 的守衛而不是印證它。實測（把守衛拿掉後注入重疊宣�
 暫存器兩種設計**各建一次作為證據；**SPI 的證據只用了 fabric 暫存器**，所以 SPI 這一點是
 沿用 I2C 的結果，不是自己量到的。
 LEDDA 已盤點但啟用狀態不是 configuration 事實，未建模；RGBA 無 fabric 輸出、不適用。
+
+### 硬 IP：RGBA 的負向回歸（2026-08-25）
+
+盤點四步的第 3 步（`work/rgba.v`／`work/rgba_check.py`，`make rgba-check`，已進
+`make test` 與 `verify-repro`）。**這一步刻意不建 identity** —— `SB_RGBA_DRV` 沒有任何
+進入 fabric 的輸出，它驅動三支封裝腳、讀五個 fabric 輸入，是 sink 加 pin driver。
+所以它是**不適用於 driver graph**，不是「尚未建模」。
+
+**否定結論的價值等於它背後列舉的完整度**，而本專案已經三次栽在不完整的列舉上，所以
+這份回歸不只是報告「找不到 `slf_op`」：
+
+1. **28 個 db port 全部分類，且分類必須窮盡**：5 個 fabric 輸入（`CURREN`、`RGBLEDEN`、
+   `RGB0/1/2PWM`，全是 `lutff_*/in_*`）、3 支封裝腳（`RGB0/1/2`）、20 個設定位元，
+   **fabric 輸出 0 個**。出現任何無法歸類的 port 形狀就直接失敗，不會被略過。
+2. **同一套端點抽取拿去問別的 block**：I2C 15、SPI 25、LEDDA 4、RGBA 0；放置後的設計
+   也一樣（i2c 30、spi 50、rgba 0）。**一個壞掉的搜尋對前三個也會回 0**，這一條就是
+   用來排除「0 來自壞掉的量測」。
+3. **block 必須真的存在且真的啟用**，否則否定是空的：`RGBA_DRV_EN`（`(0,28) CBIT_5`）
+   從編出來的 bitstream 讀回是 `1`、在 `leds.asc` 是 `0`；`CURRENT_MODE` 與
+   `RGB0_CURRENT` 也讀得回來（六個位元恰好一個為 1）。
+4. **三支腳確實是它自己的 pad**：db 的 `(4,31,0)/(5,31,0)/(6,31,0)` 經
+   `pinloc_db['5k-sg48']` 對應到封裝腳 **39/40/41**；nextpnr 三次明說
+   `not creating SB_IO`；在 fixture 裡那三個 tile **只剩 `glb_netwk_4`**（同樣三個 tile
+   在把腳位當普通 IO 用的 `leds` 裡有 19 個 segment、含 `io_0/D_OUT_0`）。
+5. **模型不是對 pad 一律視而不見**：同一個設計裡的時脈輸入腳 `(12,31) io_1/D_IN_0`
+   **確實**拿到 `("io",12,31,...)` identity —— 所以 RGBA 三支腳的「沉默」是那些 pad 的
+   性質，不是模型看不見 IO。
+6. 整個 fixture 的 driver 種類只有 `{lutff, io}`，沒有任何硬 IP identity；model 與
+   oracle 的 baseline 衝突數皆為 0。
+
+**「不適用」與「未判定」是兩件事，這裡並排釘住**：RGBA **有啟用位元、沒有 fabric 輸出**
+→ 它的狀態是 configuration 事實，而且沒有東西可驅動，是**確定的否定**；LEDDA 正好相反，
+**有 4 個 fabric 輸出、沒有任何啟用位元** → 無法從 configuration 判斷它是否在驅動，
+維持 **UNDETERMINED**、不建 identity。
+
+**鑑別力（實測過）**：給 RGBA 的 port 表塞進一個假的 `slf_op` 輸出 → 四條檢查同時變紅；
+把端點抽取改成永遠回空 → I2C/SPI/LEDDA 那三條立刻變紅，也就是說「RGBA 是 0」這個結論
+不可能由一個壞掉的搜尋矇混過關。
+
+**覆蓋邊界**：這說的是**公開設定裡** `SB_RGBA_DRV` 沒有進入 fabric 的路徑，因此在這張圖
+裡不可能是來源。它不涉及該 block 的類比行為，而且仍是關於 IceStorm 資料庫的陳述 ——
+本專案沒有任何一項在矽上量測過。
 
 ## 3. Decode、readback 與獨立性
 

@@ -94,6 +94,15 @@
       "named_positives": [],
       "failed_checks": [],
       "fixture": "spi"
+    },
+    {
+      "script": "rgba_check.py",
+      "asc": "rgba.asc",
+      "asc_sha256": "c197e3469148fa752fcf4acb167faa08d1aeb0d025f56ac33845f5ff12de33bf",
+      "status": "pass",
+      "named_positives": [],
+      "failed_checks": [],
+      "fixture": "rgba"
     }
   ],
   "sweeps": [
@@ -20156,7 +20165,8 @@
     "osc_selector.asc": "25d44fb2688b0965ec30ee7048f8b2a7d02cc88e82897729a3b19bb8e7a0d53a",
     "osc_fabric_selector.asc": "e7dacd437eb5029003987970ee29d06a2da37d265741a8bef69d76a8db82a1c0",
     "i2c.asc": "5cb8753cca12f7c4b9d6369cf237ef486eebb3ce16a88346d9a0b0d0e06e34b7",
-    "spi.asc": "74ef86966014288e96de55ffe0f8b65b263629dce6e8fe51a16b54586417d133"
+    "spi.asc": "74ef86966014288e96de55ffe0f8b65b263629dce6e8fe51a16b54586417d133",
+    "rgba.asc": "c197e3469148fa752fcf4acb167faa08d1aeb0d025f56ac33845f5ff12de33bf"
   },
   "model_sources": {
     "bitclass.py": "f7d49b45f3378485a5da39522db0cdbe00ff350dc64f2f663fa7b0a0370007a2",
@@ -20164,19 +20174,20 @@
     "decode_vlog.py": "a7c261fa8a07c8e3c46f7928001cdc580753567fa9ed9b4e44d59f0052a8507e",
     "exhaustive.py": "e5d4d98c166c842796ca2224d2fb5afdd67ee5be32c81cbcc4a4123f14653e98",
     "hard_ip_inventory.py": "86c7769edf1dbe2b3a8d068d4087a469a9a98b3b48490e4d7ffab4533527dd54",
-    "i2c_check.py": "acea4ddd26da6333a095120422b5300657806a599d3c59b41d83bcd3f7c68860",
+    "i2c_check.py": "bc1b7089b2005c6b0056cd72bdb81f6cf92798282cdb85c17b06adbf89d6071f",
     "iceutil.py": "5bfa02b31e4c7992e80e24b8d8b87c4158f35cf663c53547f41d99a892e88439",
-    "manifest.py": "92d5d1815741039b4f29698d5415ab8fcf44f0dcc58d78a9f1f0ff6c7dc9cfa0",
+    "manifest.py": "6af6c2150f5c21cebb85337ed407983011e293369377fc6c97ad13246df97785",
     "mkprobe.py": "9628968cdd51b324084a0646e65962b5c474c24bcac938ba892a16ecbd274d0c",
     "mkrouteprobe.py": "795f3f411d4fd8637b5dca344ac458a405ba419abd273e52874df373b804e41d",
     "muxmodel.py": "30e484330728e8b5eb562a59ebcfb18d7f625a7ae1abc68e8dfe475fbff774e9",
     "oracle.py": "dc3843828724853459e911dcb347c050ee7ab018a3b853487789ffca495152ca",
-    "osc_check.py": "34ff9367706607008d11f8c2fbd85574a69331425baf850d9abc9451e61ce54d",
+    "osc_check.py": "73813ee838c70bf3c60635ea780e445c74a85345d88c6ab31f518cf231c11a2d",
     "osc_evidence.py": "b320e3d26eec5367d528bf04f5989252993253920bdfd2c87819b69bf8b46811",
-    "pll_check.py": "347db45c393f696edcc2c9c56d3c7f31a6a0270336af37f3ef10189e22eee6f1",
-    "spi_check.py": "1820cccc8ed9922d355608e6a28d301d3462a3ac87b5a3a52b68e8eeef6389a1",
+    "pll_check.py": "0f6d0d8bd5e297894301055add64e311d19dd6f9d68bebd873d49eb6a2e2939f",
+    "rgba_check.py": "ee3cc0599275db0eeebcb870684597d6b65e1bfdf821c45f8f5b45a8576cf2fd",
+    "spi_check.py": "615823f563e3d21f81e3e6e33f93c43a4253ed119cd042efdfaaba8a99caa27d",
     "spi_evidence.py": "66ae2e512e2aac3cf60804df67a6b43ce30673432d6c57e9adeda8e0d7d5cd5e",
-    "spram_check.py": "1f24e9fae379346b006c43c120fd6e53b63ee5b3af8f49ccaf4ef76f81cadb1a",
-    "tile_coverage_check.py": "3e51871acced2979eeb7f31ae5849fb5d3666aea9e8a34054afe8ef7e5042694"
+    "spram_check.py": "64b4e5981ab7f0a74670fcab8a5aa2662a958876540ac7d3a5a0ba970a2c2db1",
+    "tile_coverage_check.py": "81ba4543874dfd761398c0399865a2c930e813bdf75e0b2b9f2d6933d416fc20"
   }
 }

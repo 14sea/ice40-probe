@@ -504,7 +504,7 @@ def main() -> int:
         "(make spi-check).  LEDDA has no enabling bit at all, so its state is "
         "not a configuration fact, and SB_RGBA_DRV has no fabric-facing "
         "output, so it is not applicable to the driver graph rather than "
-        "missing from it."
+        "missing from it (make rgba-check)."
     )
     return 0
 

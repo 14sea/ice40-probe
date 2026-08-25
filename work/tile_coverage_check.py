@@ -47,6 +47,7 @@ FIXTURES = (
     "osc.asc",
     "i2c.asc",
     "spi.asc",
+    "rgba.asc",
 )
 
 failures: list[str] = []

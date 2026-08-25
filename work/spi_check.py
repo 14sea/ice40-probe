@@ -710,7 +710,8 @@ def main() -> int:
         "The block's inputs, its register semantics, and what any single "
         "enable bit means on its own are outside it.  LEDDA is surveyed but "
         "its enable state is not a configuration fact, and SB_RGBA_DRV has no "
-        "fabric-facing output and is not applicable to the driver graph."
+        "fabric-facing output and is not applicable to the driver graph "
+        "(make rgba-check)."
     )
     return 0
 

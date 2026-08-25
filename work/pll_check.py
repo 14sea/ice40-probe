@@ -299,7 +299,8 @@ def main() -> int:
         "fixtures (make spram-check, make osc-check), as does SB_I2C "
         "(make i2c-check) and SB_SPI (make spi-check).  LEDDA is surveyed but "
         "its enable state is not a configuration fact; SB_RGBA_DRV has no "
-        "fabric-facing output and is not applicable to the driver graph."
+        "fabric-facing output and is not applicable to the driver graph "
+        "(make rgba-check)."
     )
     return 0
 

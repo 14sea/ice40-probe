@@ -392,7 +392,8 @@ def main() -> int:
         "be brought to that mux and no second source can be constructed there.  "
         "SB_I2C and SB_SPI have their own fixtures (make i2c-check, "
         "make spi-check).  LEDDA is still unmodelled; SB_RGBA_DRV has no "
-        "fabric-facing output and is not applicable to the driver graph."
+        "fabric-facing output and is not applicable to the driver graph "
+        "(make rgba-check)."
     )
     return 0
 

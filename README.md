@@ -49,8 +49,10 @@ rather than guessed; a configuration that sets only some of them is refused a
 verdict.  `make hard-ip-inventory` surveys what is left: LEDDA (4 fabric
 endpoints) drives the fabric but has no enabling bit in the published
 configuration, so whether it is a source at all is recorded as undetermined and
-it is not modelled; RGBA drives package pins only and is not applicable to the
-driver graph.
+it is not modelled.  RGBA is the mirror image -- an enabling bit and no fabric
+output at all -- so it is not applicable to the driver graph rather than
+missing from it, and `make rgba-check` regression-tests that negative on an
+exhaustive count of the block's twenty-eight database ports.
 `glb_netwk_*` is never treated as a source; it is a distribution network.
 
 ## Requirements
@@ -188,8 +190,8 @@ that enable a routing path in non-empty logic tiles, hard-IP coverage extends to
 one PLL configuration, one SPRAM instance, the two oscillators, both SB_I2C
 instances and both SB_SPI instances, LEDDA is
 surveyed but not modelled because its enable state is not a configuration fact,
-RGBA is not applicable to the driver graph, and no claim here has ever been
-checked against silicon.
+RGBA carries a negative regression instead of an identity because it has no
+fabric output, and no claim here has ever been checked against silicon.
 
 ## Licence
 
@@ -208,7 +210,7 @@ SHA-256 of both model sources, so a stale file cannot silently be resumed after
 the model changes.
 
 What *is* tracked is `docs/evidence_manifest.md` (`make manifest`), which
-re-runs the five hard-IP fixture checks and records, for every sweep, the
+re-runs the six hard-IP fixture checks and records, for every sweep, the
 SHA-256 of the file, the hashes it was produced against, the counts, and the
 coordinates of every oracle positive.  `results/archive/*.jsonl.gz`
 (`make archive`) is tracked too: the sweeps compress about forty-fold, so the
