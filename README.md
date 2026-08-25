@@ -38,15 +38,19 @@ sources: `make pll-check` exercises UP5K `SB_PLL40_2F_PAD` port A's global path
 and port B's core path, `make spram-check` one `SB_SPRAM256KA` read-data port,
 `make osc-check` the HFOSC-driven global network and both oscillators'
 direct fabric outputs, and `make i2c-check` the fifteen fabric outputs of each
-of the two `SB_I2C` instances.  Hard-IP coverage is therefore partial -- PLL
-port A's core path, the other PLL variants, the SPRAM write path and its other
-three instances, and the LFOSC global are not exercised, and what either of the
-two `I2C_ENABLE` bits means on its own is recorded as undetermined rather than
-guessed.  `make hard-ip-inventory` surveys the rest: SPI (25 fabric endpoints)
-and LEDDA (4) drive the fabric and are not modelled yet; RGBA drives package
-pins only and is not applicable to the driver graph.  LEDDA has no enabling bit
-in the published configuration, so whether it is a source at all is recorded as
-undetermined.
+of the two `SB_I2C` instances, and `make spi-check` the twenty-five outputs
+of each of the two `SB_SPI` instances -- with `make spi-evidence` rebuilding
+the `BUS_ADDR74` mapping over all sixteen values and the enable vector each
+instance writes.  Hard-IP coverage is therefore partial -- PLL port A's core
+path, the other PLL variants, the SPRAM write path and its other three
+instances, and the LFOSC global are not exercised, and what any single
+`I2C_ENABLE` or `SPI_ENABLE` bit means on its own is recorded as undetermined
+rather than guessed; a configuration that sets only some of them is refused a
+verdict.  `make hard-ip-inventory` surveys what is left: LEDDA (4 fabric
+endpoints) drives the fabric but has no enabling bit in the published
+configuration, so whether it is a source at all is recorded as undetermined and
+it is not modelled; RGBA drives package pins only and is not applicable to the
+driver graph.
 `glb_netwk_*` is never treated as a source; it is a distribution network.
 
 ## Requirements
@@ -182,7 +186,8 @@ it is not chip reverse engineering.  Where this project's own coverage is
 partial that is stated rather than glossed over: the sweeps enumerate only flips
 that enable a routing path in non-empty logic tiles, hard-IP coverage extends to
 one PLL configuration, one SPRAM instance, the two oscillators and both SB_I2C
-instances, two further blocks (SPI and LEDDA) are surveyed but not modelled,
+instances, both SB_I2C instances and both SB_SPI instances, LEDDA is
+surveyed but not modelled because its enable state is not a configuration fact,
 RGBA is not applicable to the driver graph, and no claim here has ever been
 checked against silicon.
 
@@ -203,7 +208,7 @@ SHA-256 of both model sources, so a stale file cannot silently be resumed after
 the model changes.
 
 What *is* tracked is `docs/evidence_manifest.md` (`make manifest`), which
-re-runs the four hard-IP fixture checks and records, for every sweep, the
+re-runs the five hard-IP fixture checks and records, for every sweep, the
 SHA-256 of the file, the hashes it was produced against, the counts, and the
 coordinates of every oracle positive.  `results/archive/*.jsonl.gz`
 (`make archive`) is tracked too: the sweeps compress about forty-fold, so the

@@ -15,7 +15,7 @@ ORACLE_WORKERS ?= 16
 PY_SOURCES := $(wildcard $(WORK)/*.py)
 export PYTHONPYCACHEPREFIX := $(abspath $(BUILD)/pycache)
 
-.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check osc-evidence i2c i2c-check tile-coverage carry-check hard-ip-inventory guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-full oracle-dense-addrem manifest manifest-check archive verify-repro versions clean
+.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check osc-evidence i2c i2c-check spi spi-check spi-evidence tile-coverage carry-check hard-ip-inventory guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-full oracle-dense-addrem manifest manifest-check archive verify-repro versions clean
 
 all: $(BUILD)/leds.bin $(BUILD)/dense.asc probes
 
@@ -107,7 +107,7 @@ carry-check: $(BUILD)/leds.asc $(BUILD)/dense.asc $(WORK)/carry_check.py $(WORK)
 hard-ip-inventory: $(WORK)/hard_ip_inventory.py $(WORK)/exhaustive.py
 	$(PYTHON) $(WORK)/hard_ip_inventory.py
 
-tile-coverage: $(BUILD)/leds.asc $(BUILD)/dense.asc $(BUILD)/pll.asc $(BUILD)/spram.asc $(BUILD)/osc.asc $(BUILD)/i2c.asc $(WORK)/tile_coverage_check.py $(WORK)/carry_check.py $(WORK)/hard_ip_inventory.py $(WORK)/iceutil.py
+tile-coverage: $(BUILD)/leds.asc $(BUILD)/dense.asc $(BUILD)/pll.asc $(BUILD)/spram.asc $(BUILD)/osc.asc $(BUILD)/i2c.asc $(BUILD)/spi.asc $(WORK)/tile_coverage_check.py $(WORK)/carry_check.py $(WORK)/hard_ip_inventory.py $(WORK)/iceutil.py
 	$(PYTHON) $(WORK)/tile_coverage_check.py
 
 osc-evidence: $(WORK)/osc_evidence.py $(WORK)/exhaustive.py $(WORK)/oracle.py
@@ -130,6 +130,25 @@ i2c: $(BUILD)/i2c.asc
 
 i2c-check: $(BUILD)/i2c.asc $(BUILD)/leds.asc $(BUILD)/osc.asc $(WORK)/i2c_check.py $(WORK)/exhaustive.py $(WORK)/oracle.py
 	$(PYTHON) $(WORK)/i2c_check.py $<
+
+# SPI fixture: fifth hard-IP fixture.  Twenty-five fabric outputs per instance
+# -- the inventory's first figure of nineteen was a property of its own Verilog
+# -- and both instances are placed because their four enable bits are split
+# across different IO tiles.
+$(BUILD)/spi.json: $(WORK)/spi.v | $(BUILD)
+	$(YOSYS) -q -l $(BUILD)/spi_yosys.log -p 'synth_ice40 -json $@' $<
+
+$(BUILD)/spi.asc: $(BUILD)/spi.json $(WORK)/spi.pcf
+	$(NEXTPNR) --up5k --package sg48 --json $< --pcf $(WORK)/spi.pcf --asc $@ --freq 12 --log $(BUILD)/spi_pnr.log
+
+spi: $(BUILD)/spi.asc
+
+# BUS_ADDR74 mapping and the enable vector, rebuilt over all sixteen values.
+spi-evidence: $(BUILD)/leds.asc $(WORK)/spi_evidence.py $(WORK)/exhaustive.py
+	$(PYTHON) $(WORK)/spi_evidence.py
+
+spi-check: $(BUILD)/spi.asc $(BUILD)/leds.asc $(BUILD)/osc.asc $(BUILD)/i2c.asc $(WORK)/spi_check.py $(WORK)/exhaustive.py $(WORK)/oracle.py
+	$(PYTHON) $(WORK)/spi_check.py $<
 
 guarded: $(BUILD)/guarded.bin $(BUILD)/guarded_rt.v
 
@@ -165,7 +184,7 @@ $(BUILD)/test_mut2.vvp: $(BUILD)/leds_mut2_sim.v $(WORK)/tb.v
 $(BUILD)/test_mut3.vvp: $(BUILD)/leds_mut3_sim.v $(WORK)/tb.v
 	$(IVERILOG) -g2012 -Wall -DEXPECT_MUT3 -o $@ $^
 
-test: tile-coverage carry-check pll-check spram-check osc-check i2c-check osc-evidence manifest-check guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
+test: tile-coverage carry-check pll-check spram-check osc-check i2c-check spi-check osc-evidence spi-evidence manifest-check guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
 	$(VVP) $(BUILD)/test_baseline.vvp
 	$(VVP) $(BUILD)/test_mut2.vvp
 	$(VVP) $(BUILD)/test_mut3.vvp
@@ -242,7 +261,7 @@ archive:
 	for f in $(RESULTS)/*.jsonl; do gzip -9 -c "$$f" > $(RESULTS)/archive/$$(basename $$f).gz; done
 	cd $(RESULTS)/archive && sha256sum *.gz > SHA256SUMS
 
-verify-repro: all pll-check spram-check osc-check i2c-check
+verify-repro: all pll-check spram-check osc-check i2c-check spi-check
 	cmp $(WORK)/leds.asc $(BUILD)/leds.asc
 	cmp $(WORK)/dense.asc $(BUILD)/dense.asc
 	cmp $(WORK)/leds.bin $(BUILD)/leds.bin
@@ -257,6 +276,7 @@ verify-repro: all pll-check spram-check osc-check i2c-check
 	cmp $(WORK)/osc_selector.asc $(BUILD)/osc_selector.asc
 	cmp $(WORK)/osc_fabric_selector.asc $(BUILD)/osc_fabric_selector.asc
 	cmp $(WORK)/i2c.asc $(BUILD)/i2c.asc
+	cmp $(WORK)/spi.asc $(BUILD)/spi.asc
 
 versions:
 	$(YOSYS) -V

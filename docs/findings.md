@@ -161,9 +161,10 @@ oracle 完全一致。
 **「偽陰性已關閉」的正確範圍**：指增量模型相對於**全圖重建**沒有偽陰性，且是在同一份
 database 與同一組 driver identity 假設之下。**不能外推成「矽上沒有偽陰性」。**
 
-**仍未涵蓋**：driver whitelist 以外的硬 IP —— **SPI 與 LEDDA 尚未建模**；
-**RGBA 沒有 fabric 輸出，因此不適用於 driver graph**（不是「尚未建模」，見盤點一節）。
-PLL、oscillator 與 I2C 已有專屬 fixture，見上文，但覆蓋仍是部分的。**更根本的是**：model 與 oracle 共用
+**仍未涵蓋**：driver whitelist 以外的硬 IP —— **LEDDA 尚未建模**（它的啟用狀態不是
+configuration 事實）；**RGBA 沒有 fabric 輸出，因此不適用於 driver graph**（不是「尚未
+建模」，見盤點一節）。PLL、oscillator、I2C 與 SPI 已有專屬 fixture，見上文，但覆蓋仍是
+部分的。**更根本的是**：model 與 oracle 共用
 同一個 IceStorm database，兩者一致**只代表內部結構一致，不能排除資料庫本身的錯誤**。
 （此處原本引「`CLKHF_DIV` 完全不進 ASC」當作資料庫缺口的例子 —— **那個說法已於
 2026-08-23 撤回**，該除頻值就編碼在 `dsp1_tile (0,16)`，錯的是我當初的 tile 列舉，
@@ -294,8 +295,8 @@ driver，這個陽性就構造不出來。
 **覆蓋邊界（必須照這樣引用）**：只驗過 **HFOSC**。LFOSC 的全域對應的 `fabout` 位於
 io tile `(12,0)`，而 **sg48 封裝沒有把該 tile 的任何 block 接出來**，因此無法把 LUT
 輸出帶到那顆 mux，也就構造不出第二個來源 —— 這是封裝限制，不是模型缺陷。I2C 已於
-2026-08-25 建立 identity（見下文）；SPI 與 LEDDA 仍未建模，RGBA 無 fabric 輸出、
-不適用於 driver graph。
+2026-08-25 建立 identity，SPI 同日跟進（皆見下文）；LEDDA 仍未建模，RGBA 無 fabric
+輸出、不適用於 driver graph。
 
 **⚠ 一項已撤回的錯誤結論**：本文件先前寫過「`CLKHF_DIV` 在 ASC 裡完全沒有表示」。
 **那是錯的。** 它編碼在 **`dsp1_tile (0,16)` 的兩個 IpConfig 位元**（`CBIT_3` = 低位
@@ -321,7 +322,7 @@ io tile `(12,0)`，而 **sg48 封裝沒有把該 tile 的任何 block 接出來*
 | 硬 IP | 放置 | fabric 端點（`slf_op`） | 啟用位元 | 判定 |
 |---|---|---|---|---|
 | `SB_I2C` | X0/Y31 | **15** @ (0,29),(0,30) | `I2C_ENABLE_0/1` @ (13,31)/(12,31) | 值得建 fixture → **已建，見下文（2026-08-25）** |
-| `SB_SPI` | X0/Y0 | **25** @ (0,19)–(0,22) | `SPI_ENABLE_0..3` @ (7,0)/(6,0) | 值得建 fixture |
+| `SB_SPI` | X0/Y0 | **25** @ (0,19)–(0,22) | `SPI_ENABLE_0..3` @ (7,0)/(6,0) | 值得建 fixture → **已建，見下文（2026-08-25）** |
 | `SB_LEDDA_IP` | X0/Y31 | **4** @ (0,28),(0,29) | **無** | 值得建 fixture；啟用狀態**未判定** |
 | `SB_RGBA_DRV` | X0/Y30 | **0** | `RGBA_DRV_EN` @ (0,28) `CBIT_5` | **不適用於 driver graph** |
 
@@ -496,6 +497,75 @@ oracle 全掃（本專案的 sweep machinery 只走 logic tile），所以這裡
 閘門是 db 指名的那組啟用位元。IP 的輸入、暫存器語意、以及單一啟用位元的意義都在邊界
 之外。**SPI 與 LEDDA 尚未建模；RGBA 無 fabric 輸出，故不適用於 driver graph。**
 
+### 硬 IP：SPI identity（2026-08-25）
+
+盤點四步的第 2 步（`work/spi.v`／`work/spi_check.py`／`work/spi_evidence.py`，
+`make spi-check`、`make spi-evidence`，兩者都已進 `make test` 與 `verify-repro`）。
+缺口與 SPRAM／I2C 同型：每個 `SB_SPI` 有 **25 個輸出**經 ipcon tile 的 `slf_op_*`
+進入 fabric，whitelist 一個都比對不到。
+
+**25，不是 19。** 盤點第一版量到 19，因為那份 Verilog 只接 `MCSNO0`/`MCSNOE0`，
+`(0,21)`／`(0,22)` 的六個端點從未被 place —— 那是**測試平台的性質，不是元件的性質**。
+本 fixture 每個 instance 的 25 個輸出全部被消費，並且與 db 做**雙向**比對；另外斷言
+**50 個端點全部出現在 `ic.group_segments()`** 裡（拿 db 比 db 抓不到「輸出後來沒被繞線」）。
+
+**兩件事改成可重生證據，不再是從 log 手抄的說法**（`work/spi_evidence.py`，16 次
+build，約 10 秒）：
+
+1. **`BUS_ADDR74` 的合法值與 instance 對應**：`SB_SPI` 不是靠放置約束選 instance，
+   而是 nextpnr 讀這個參數。**全部 16 個 4-bit 值都建一次**，結果由 placer 自己的報告
+   解析：只有 `0b0000` → `X0/Y0/spi_0`、`0b0010` → `X25/Y0/spi_1` 被接受，其餘 14 個
+   被明確拒絕（不是被默默改寫成別的 instance）。
+2. **「啟用」的位元向量是量出來的**：每個 instance 單獨建一次，讀回自己的四個位元＝
+   `1111`、另一個 instance 的四個＝`0000`，而完全沒有 SPI 的設計八個位元全是 `0`。
+   少了後兩項對照，「位元是 1」也可能只是它恆為 1。
+
+**啟用位元的佈局兩個 instance 不同**：左邊 `SPI_ENABLE_0/1` 在 `(7,0)`、`2/3` 在
+`(6,0)`；右邊 `0/2` 在 `(23,0)`、`1/3` 在 `(24,0)`。所以 fixture 兩個 instance 都放。
+
+**identity 粒度：每個 port 一個**（50 端點／50 個相異 identity）。這次有一個**只有
+per-port 粒度才抓得到的具名陽性**：同一個 instance 的兩個輸出被接到同一條網路上。
+
+**三個具名陽性**（model 與全圖重建 oracle 皆 +1）：
+
+| 翻轉 | 啟用的 route | 參與的來源 |
+|---|---|---|
+| `(0,19) B6[51]` | `slf_op_3 -> sp12_v_b_6` | `("spi",0,0,"SBDATO2")` + `("lutff",12,1,1,"out")` |
+| `(25,19) B3[48]` | `slf_op_1 -> sp4_v_b_18` | `("spi",25,0,"SBDATO0")` + `("lutff",12,1,3,"out")` |
+| `(0,19) B3[53]` | `slf_op_1 -> sp4_r_v_b_35` | `("spi",0,0,"SBDATO0")` + `("spi",0,0,"MCSNOE1")` |
+
+第三個附**粒度反事實**：把 identity 折成「每個 instance 一個」再跑同一個翻轉，衝突就
+消失了 —— 證明 per-port 粒度確實是判決的依據，而不只是好看的命名。另有端點反事實：
+只抽掉 `(0,19,slf_op_3)` 一個端點的 identity，第一個陽性就被判為乾淨，其餘 49 個不受影響。
+
+**這次不先用 model 篩，而是先獨立列出完整結構候選集**（覆核意見）：在八個 SPI 輸出
+tile 裡，凡是「單一位元翻轉會新增或移除至少一條**碰到 SPI 端點**的 route」的座標，
+全部列出 —— **601 個**（550 個純新增、50 個純移除、1 個 add+remove）。接著**同一批
+候選同時跑 model 與全圖重建 oracle**：
+
+| 類別 | 數量 | model 判衝突 | oracle 增量 |
+|---|---:|---:|---|
+| 全部結構候選 | 601 | 50 | 50 個 +1，551 個 0 |
+
+**零歧異，而且兩個方向都檢查了** —— 先用 model 陽性篩選的話，模型自己判為乾淨的那
+551 個永遠不會被檢定（本專案的偽陰性都是這個形狀）。16 workers 約 2 分鐘。
+
+**結構事實（順帶釘住）**：SPI 端點在 routing 表裡**只當來源，從不當目的端**
+（648 次作為來源、0 次作為目的端）。
+
+**undetermined 一樣是 fail-closed**：四個 `SPI_ENABLE` 位元個別的語意沒有公開資料可
+判定（nextpnr 永遠四個一起寫）。清掉 1、2、3 個位元三種情況都各有回歸，斷言 model 與
+oracle 都報 undetermined、都不給 identity、而且**都拒絕給出判決**；對照組是「四個全清
+＝off」，判決層照常運作。這些位元同樣都在 IO tile，sweep 碰不到。
+
+**歸屬守衛改成通用的兩兩比對**：原本只拿 I2C 去對其他三個 source map，現在 PLL／SPRAM／
+oscillator／I2C／SPI 五者**每一對**都比。守衛的鑑別力測試同 I2C：在振盪器 fixture 上
+注入一個 SPI 對 `(25,29,slf_op_0)` 的宣稱，必須拋 `RuntimeError`。
+
+**覆蓋邊界（照這樣引用）**：只涵蓋兩個 `SB_SPI` instance 的 **25 個 fabric 輸出**，
+閘門是 db 指名的那組啟用位元。IP 的輸入、暫存器語意、單一啟用位元的意義都在邊界之外。
+LEDDA 已盤點但啟用狀態不是 configuration 事實，未建模；RGBA 無 fabric 輸出、不適用。
+
 ## 3. Decode、readback 與獨立性
 
 公開的 Lattice 配置流程描述寫入 configuration SRAM、啟動以及 CDONE 檢查，
@@ -627,16 +697,17 @@ make verify-repro
 - 「非全零 tile」是 ASC 資料特徵，不等同精確的設計使用性分析。
 - 全域 driver graph 的來源 whitelist 是 LUT `out/lout/cout`、IO `D_IN_*`、RAM
   `RDATA_*` 及 UP5K DSP `mult/O_*`；前三類沿用 IceStorm `icebox_vlog -D` heuristic。
-  PLL（core/global）、SPRAM、振盪器（全域與 fabric 兩條輸出）與 I2C（兩個 instance
-  各 15 個 fabric 輸出）已有 configuration-aware identity；**SPI、LEDDA 已完成盤點但
-  尚未建模**，RGBA 判定為不適用。因此仍不能把這份 driver 集合外推成完整 UP5K 物理
-  driver map。
+  PLL（core/global）、SPRAM、振盪器（全域與 fabric 兩條輸出）、I2C（兩個 instance 各
+  15 個 fabric 輸出）與 SPI（兩個 instance 各 25 個）已有 configuration-aware identity；
+  **LEDDA 已完成盤點但尚未建模**，RGBA 判定為不適用。因此仍不能把這份 driver 集合外推
+  成完整 UP5K 物理 driver map。
 - 振盪器 identity 的閘門是「它在驅動全域網路」這個路由事實，不是「它在運轉」——
   後者由 fabric 輸入 `CLKHFPU`／`CLKHFEN` 決定，不存在對應的設定位元。
 - LEDDA 在公開設定裡沒有任何啟用位元，其啟用狀態**未判定**，因此未建立 identity。
-- I2C 的兩個 `I2C_ENABLE` 位元**個別的語意未判定**：nextpnr 一律同時寫入兩個，公開
-  資料也沒有把它們分開。因此「恰好只設一個」的設定被明確報成 undetermined，不當成
-  啟用（會憑空發明 15 個 driver），也不當成停用（會藏起 15 個 driver）。
+- I2C 的兩個 `I2C_ENABLE`、SPI 的四個 `SPI_ENABLE` 位元**個別的語意皆未判定**：
+  nextpnr 一律整組同時寫入，公開資料也沒有把它們分開。因此「只設其中一部分」的設定被
+  明確報成 undetermined，不當成啟用（會憑空發明 15／25 個 driver），也不當成停用
+  （會藏起同樣多的 driver），而且**model 與 oracle 都直接拒絕對這種設定給出判決**。
 - driver graph 沒有類比電壓、強度與瞬態模型。
 - 未對每個 routing event 做完整功能可達性或可觀測性分析。
 - 只有一塊板，沒有跨晶片 robustness 實驗。

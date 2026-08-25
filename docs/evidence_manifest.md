@@ -19,20 +19,22 @@ from quoting an earlier run.
 - `work/bitclass.py`: `f7d49b45f3378485a5da39522db0cdbe00ff350dc64f2f663fa7b0a0370007a2`
 - `work/carry_check.py`: `9209868335ffdf184bf9e8966faad9041341a16f9d1831d0b8f8f862068bcc3d`
 - `work/decode_vlog.py`: `a7c261fa8a07c8e3c46f7928001cdc580753567fa9ed9b4e44d59f0052a8507e`
-- `work/exhaustive.py`: `b3d77dcfe9b4a1ca407231ed703b9e2f71b759a88e14bef151a0636d1d2789d6`
+- `work/exhaustive.py`: `e0256e27eb4b3f7134c909bff33d19da7984fc5477b7a26cfcd66b6c0b7957d6`
 - `work/hard_ip_inventory.py`: `86c7769edf1dbe2b3a8d068d4087a469a9a98b3b48490e4d7ffab4533527dd54`
-- `work/i2c_check.py`: `a86da239926926f790c2983d65e0909d19f07b67bf7a01932c4037b10865d461`
+- `work/i2c_check.py`: `acea4ddd26da6333a095120422b5300657806a599d3c59b41d83bcd3f7c68860`
 - `work/iceutil.py`: `5bfa02b31e4c7992e80e24b8d8b87c4158f35cf663c53547f41d99a892e88439`
-- `work/manifest.py`: `3bbb7245eefcb4fb3bc9af5bb21fbf05f97f6dbfbddd7359f63fcd9dd5ce3c71`
+- `work/manifest.py`: `92d5d1815741039b4f29698d5415ab8fcf44f0dcc58d78a9f1f0ff6c7dc9cfa0`
 - `work/mkprobe.py`: `9628968cdd51b324084a0646e65962b5c474c24bcac938ba892a16ecbd274d0c`
 - `work/mkrouteprobe.py`: `795f3f411d4fd8637b5dca344ac458a405ba419abd273e52874df373b804e41d`
 - `work/muxmodel.py`: `30e484330728e8b5eb562a59ebcfb18d7f625a7ae1abc68e8dfe475fbff774e9`
-- `work/oracle.py`: `b1af0aae0c70c52216c1f008c6540f362e4819d272ced7ce1cd743fa713612ef`
-- `work/osc_check.py`: `8a8291a41fba500d2fb52985e79a0317aa4cf9f25264d8783f58412da6562919`
+- `work/oracle.py`: `bd0575f3569c962579fbc0701a7f153b2cbbb2d9383bd55af35c486949472fad`
+- `work/osc_check.py`: `34ff9367706607008d11f8c2fbd85574a69331425baf850d9abc9451e61ce54d`
 - `work/osc_evidence.py`: `b320e3d26eec5367d528bf04f5989252993253920bdfd2c87819b69bf8b46811`
-- `work/pll_check.py`: `c9c0add6b7e66869a3c27f2934656aa69e41261cb3b794fb2611528b4256089a`
-- `work/spram_check.py`: `66608e5b01d026c928ea2f9ae2cc7cb7068f87b92db30c08f5f9b9a185dd83b3`
-- `work/tile_coverage_check.py`: `d8840b3b87d771821f43d9114e90a47982599dfb040338b2dd41bbd37b96f173`
+- `work/pll_check.py`: `347db45c393f696edcc2c9c56d3c7f31a6a0270336af37f3ef10189e22eee6f1`
+- `work/spi_check.py`: `82d6f8fcf2cd1a66f859b9cba60c46d4d878700f61f3103a54027f17cba84f8c`
+- `work/spi_evidence.py`: `6fdc1acc9dbd96648025dc37b2652057b137af2ebc11b865cd20e87497237480`
+- `work/spram_check.py`: `1f24e9fae379346b006c43c120fd6e53b63ee5b3af8f49ccaf4ef76f81cadb1a`
+- `work/tile_coverage_check.py`: `3e51871acced2979eeb7f31ae5849fb5d3666aea9e8a34054afe8ef7e5042694`
 
 ## Hard-IP fixtures
 
@@ -45,6 +47,7 @@ from quoting an earlier run.
   - HFOSC positive: tile (12,31) bit B4[15]
   - HFOSC fabric positive: tile (0,28) bit B15[52]
 - **i2c** (i2c.asc, `5cb8753cca12f7c4…`): PASS
+- **spi** (spi.asc, `74ef86966014288e…`): PASS
 
 ## Sweeps
 
@@ -2600,3 +2603,4 @@ These are the checked-in artifacts `make verify-repro` recreates byte for byte.
 - `work/osc_selector.asc`: `25d44fb2688b0965ec30ee7048f8b2a7d02cc88e82897729a3b19bb8e7a0d53a`
 - `work/osc_fabric_selector.asc`: `e7dacd437eb5029003987970ee29d06a2da37d265741a8bef69d76a8db82a1c0`
 - `work/i2c.asc`: `5cb8753cca12f7c4b9d6369cf237ef486eebb3ce16a88346d9a0b0d0e06e34b7`
+- `work/spi.asc`: `74ef86966014288e96de55ffe0f8b65b263629dce6e8fe51a16b54586417d133`

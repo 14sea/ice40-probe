@@ -21,10 +21,10 @@ not independently tested here.
 network, not a source.  When configuration connects a PLL or oscillator output
 to one, that block's identity is annotated on the passive endpoint.  PLL,
 SPRAM, both oscillators (global and direct fabric outputs) and both SB_I2C
-instances are modelled.  SPI and LEDDA are surveyed but not modelled;
-SB_RGBA_DRV has no fabric-facing output, so it is not applicable to this graph
-rather than missing from it -- see the coverage note printed at the end of a
-run.
+instances and both SB_SPI instances are modelled.  LEDDA is surveyed but not
+modelled; SB_RGBA_DRV has no fabric-facing output, so it is not applicable to
+this graph rather than missing from it -- see the coverage note printed at the
+end of a run.
 
 The full adds-only sweep over `leds` is ~49k rebuilds, so runs are resumable:
 every checked flip is appended to a JSONL result file that also records the ASC
@@ -298,8 +298,8 @@ def spram_driver_state(ic):
     return sources
 
 
-def i2c_driver_state(ic, icebox=None):
-    """Annotate the segments driven by an enabled SB_I2C.
+def enable_gated_driver_state(ic, icebox, kind, label):
+    """Annotate the segments driven by an enabled instance of `kind`.
 
     Derived here from the cell database independently of exhaustive.py, like
     everything else in this file: it exists to disagree with the model, so it
@@ -307,15 +307,13 @@ def i2c_driver_state(ic, icebox=None):
     output port is its own identity, and ownership is decided per port -- tiles
     (0,29) and (25,29) each carry outputs of two different hard IPs.
 
-    The gate is that instance's full set of `I2C_ENABLE` bits.  A configuration
-    with only some of them set is not claimed either way here; see
-    `i2c_undetermined` and the note in exhaustive.py.
+    The gate is that instance's full set of `<KIND>_ENABLE` bits.  A
+    configuration with only some of them set is not claimed either way here;
+    see `enable_gated_undetermined` and the note in exhaustive.py.
     """
-    if icebox is None:
-        icebox = load_icebox()
     sources = {}
-    for placement, cell in _i2c_cells(icebox):
-        if _i2c_enable_state(ic, cell) != "on":
+    for placement, cell in _enable_gated_cells(icebox, kind):
+        if _enable_gated_state(ic, cell, kind) != "on":
             continue
         x, y, _z = placement
         for port, value in cell.items():
@@ -324,40 +322,62 @@ def i2c_driver_state(ic, icebox=None):
                 and len(value) == 3
                 and str(value[2]).startswith("slf_op")
             ):
-                sources[(value[0], value[1], value[2])] = ("i2c", x, y, str(port))
+                sources[(value[0], value[1], value[2])] = (label, x, y, str(port))
     return sources
 
 
-def i2c_undetermined(ic, icebox=None):
+def enable_gated_undetermined(ic, icebox, kind):
     """Instances whose enabling bits disagree with each other."""
-    if icebox is None:
-        icebox = load_icebox()
     return sorted(
         placement
-        for placement, cell in _i2c_cells(icebox)
-        if _i2c_enable_state(ic, cell) == "mixed"
+        for placement, cell in _enable_gated_cells(icebox, kind)
+        if _enable_gated_state(ic, cell, kind) == "mixed"
     )
 
 
-def _i2c_cells(icebox):
+def _enable_gated_cells(icebox, kind):
     return sorted(
         (key[1], cell)
         for key, cell in icebox.extra_cells_db["5k"].items()
-        if key[0] == "I2C"
+        if key[0] == kind
     )
 
 
-def _i2c_enable_state(ic, cell) -> str:
+def _enable_gated_state(ic, cell, kind) -> str:
     values = [
         ipconfig_bit(ic, value[0], value[1], value[2])
         for port, value in sorted(cell.items())
-        if str(port).startswith("I2C_ENABLE")
+        if str(port).startswith(f"{kind}_ENABLE")
     ]
     if values and all(value == "1" for value in values):
         return "on"
     if values and all(value == "0" for value in values):
         return "off"
     return "mixed"
+
+
+def i2c_driver_state(ic, icebox=None):
+    if icebox is None:
+        icebox = load_icebox()
+    return enable_gated_driver_state(ic, icebox, "I2C", "i2c")
+
+
+def i2c_undetermined(ic, icebox=None):
+    if icebox is None:
+        icebox = load_icebox()
+    return enable_gated_undetermined(ic, icebox, "I2C")
+
+
+def spi_driver_state(ic, icebox=None):
+    if icebox is None:
+        icebox = load_icebox()
+    return enable_gated_driver_state(ic, icebox, "SPI", "spi")
+
+
+def spi_undetermined(ic, icebox=None):
+    if icebox is None:
+        icebox = load_icebox()
+    return enable_gated_undetermined(ic, icebox, "SPI")
 
 
 # padin index -> on-chip oscillator, established by placing each oscillator
@@ -424,7 +444,7 @@ def oscillator_driver_state(ic, pll_sources, icebox=None):
 
 def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
                     spram_sources=None, oscillator_sources=None,
-                    i2c_sources=None):
+                    i2c_sources=None, spi_sources=None):
     x, y, name = segment
     if pll_sources is None or pll_blocks is None:
         pll_sources, pll_blocks = pll_driver_state(ic, icebox)
@@ -434,6 +454,8 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
         oscillator_sources = oscillator_driver_state(ic, pll_sources, icebox)
     if i2c_sources is None:
         i2c_sources = i2c_driver_state(ic, icebox)
+    if spi_sources is None:
+        spi_sources = spi_driver_state(ic, icebox)
     pll = pll_sources.get(segment)
     if pll is not None:
         return pll
@@ -446,6 +468,9 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
     i2c = i2c_sources.get(segment)
     if i2c is not None:
         return i2c
+    spi = spi_sources.get(segment)
+    if spi is not None:
+        return spi
     lut = LUT_DRIVER(name)
     if lut and (x, y) in ic.logic_tiles:
         index = int(lut.group(1))
@@ -473,14 +498,18 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
 def conflicting_nets(ic, icebox) -> int:
     """Rebuild the whole graph and count nets carrying more than one source."""
     total = 0
-    undetermined = i2c_undetermined(ic, icebox)
-    if undetermined:
-        # See exhaustive.GlobalDriverGraph: counting conflicts while an
-        # instance's enable state is unknown would report the unknown as zero.
-        raise RuntimeError(
-            f"SB_I2C instance(s) {undetermined} have only some of their enable "
-            "bits set; no conflict count is produced"
-        )
+    for kind, placements in (
+        ("SB_I2C", i2c_undetermined(ic, icebox)),
+        ("SB_SPI", spi_undetermined(ic, icebox)),
+    ):
+        if placements:
+            # See exhaustive.GlobalDriverGraph: counting conflicts while an
+            # instance's enable state is unknown would report the unknown as
+            # zero.
+            raise RuntimeError(
+                f"{kind} instance(s) {placements} have only some of their "
+                "enable bits set; no conflict count is produced"
+            )
     # Decoded once per call, not once per segment: the configuration does not
     # change while the graph is being walked, and re-deriving the hard-IP state
     # for every segment costs the same answer several hundred thousand times.
@@ -488,6 +517,7 @@ def conflicting_nets(ic, icebox) -> int:
     spram_sources = spram_driver_state(ic)
     oscillator_sources = oscillator_driver_state(ic, pll_sources, icebox)
     i2c_sources = i2c_driver_state(ic, icebox)
+    spi_sources = spi_driver_state(ic, icebox)
     for segments in ic.group_segments():
         identities = {
             driver_identity(
@@ -499,6 +529,7 @@ def conflicting_nets(ic, icebox) -> int:
                 spram_sources,
                 oscillator_sources,
                 i2c_sources,
+                spi_sources,
             )
             for segment in segments
         }
@@ -755,9 +786,9 @@ def main() -> int:
         print(f"  tile=({record['x']},{record['y']}) bit=B{record['row']}[{record['column']}]")
     print(
         "\nDriver identities: LUT/IO-input/RAM-read/UP5K-DSP/PLL/SPRAM/oscillator"
-        "/SB_I2C outputs.  glb_netwk_* is a distribution network and is not "
-        "counted as a source; SPI and LEDDA remain outside this oracle's "
-        "coverage, and SB_RGBA_DRV has no fabric-facing output to cover."
+        "/SB_I2C/SB_SPI outputs.  glb_netwk_* is a distribution network and is "
+        "not counted as a source; LEDDA remains outside this oracle's coverage, "
+        "and SB_RGBA_DRV has no fabric-facing output to cover."
     )
     return 1 if disagreements else 0
 

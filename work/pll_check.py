@@ -297,9 +297,9 @@ def main() -> int:
         "names a PAD-型 PLL's port A core output io_N/PAD while this model "
         "annotates io_N/D_IN_0. SPRAM and the on-chip oscillators have their own "
         "fixtures (make spram-check, make osc-check), as does SB_I2C "
-        "(make i2c-check).  SPI and LEDDA are surveyed but not modelled; "
-        "SB_RGBA_DRV has no fabric-facing output and is not applicable to the "
-        "driver graph."
+        "(make i2c-check) and SB_SPI (make spi-check).  LEDDA is surveyed but "
+        "its enable state is not a configuration fact; SB_RGBA_DRV has no "
+        "fabric-facing output and is not applicable to the driver graph."
     )
     return 0
 

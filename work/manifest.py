@@ -7,7 +7,7 @@ script records, for every result file, the SHA-256 of the file itself, the
 hashes it was produced against (ASC, IceStorm database, both model sources),
 the counts, the coordinates of every oracle positive, and the run information.
 
-It also re-runs the four hard-IP fixture checks so the manifest states their
+It also re-runs the five hard-IP fixture checks so the manifest states their
 outcome at generation time rather than quoting a past run, and hashes the
 checked-in fixture ASCs that `verify-repro` compares against.
 
@@ -44,6 +44,7 @@ FIXTURE_CHECKS = (
     ("spram", "spram_check.py", "spram.asc"),
     ("oscillator", "osc_check.py", "osc.asc"),
     ("i2c", "i2c_check.py", "i2c.asc"),
+    ("spi", "spi_check.py", "spi.asc"),
 )
 
 TRACKED_ASCS = (
@@ -58,6 +59,7 @@ TRACKED_ASCS = (
     "osc_selector.asc",
     "osc_fabric_selector.asc",
     "i2c.asc",
+    "spi.asc",
 )
 
 
