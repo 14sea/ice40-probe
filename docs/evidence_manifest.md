@@ -19,7 +19,7 @@ from quoting an earlier run.
 - `work/bitclass.py`: `f7d49b45f3378485a5da39522db0cdbe00ff350dc64f2f663fa7b0a0370007a2`
 - `work/carry_check.py`: `9209868335ffdf184bf9e8966faad9041341a16f9d1831d0b8f8f862068bcc3d`
 - `work/decode_vlog.py`: `a7c261fa8a07c8e3c46f7928001cdc580753567fa9ed9b4e44d59f0052a8507e`
-- `work/exhaustive.py`: `e0256e27eb4b3f7134c909bff33d19da7984fc5477b7a26cfcd66b6c0b7957d6`
+- `work/exhaustive.py`: `e5d4d98c166c842796ca2224d2fb5afdd67ee5be32c81cbcc4a4123f14653e98`
 - `work/hard_ip_inventory.py`: `86c7769edf1dbe2b3a8d068d4087a469a9a98b3b48490e4d7ffab4533527dd54`
 - `work/i2c_check.py`: `acea4ddd26da6333a095120422b5300657806a599d3c59b41d83bcd3f7c68860`
 - `work/iceutil.py`: `5bfa02b31e4c7992e80e24b8d8b87c4158f35cf663c53547f41d99a892e88439`
@@ -27,12 +27,12 @@ from quoting an earlier run.
 - `work/mkprobe.py`: `9628968cdd51b324084a0646e65962b5c474c24bcac938ba892a16ecbd274d0c`
 - `work/mkrouteprobe.py`: `795f3f411d4fd8637b5dca344ac458a405ba419abd273e52874df373b804e41d`
 - `work/muxmodel.py`: `30e484330728e8b5eb562a59ebcfb18d7f625a7ae1abc68e8dfe475fbff774e9`
-- `work/oracle.py`: `bd0575f3569c962579fbc0701a7f153b2cbbb2d9383bd55af35c486949472fad`
+- `work/oracle.py`: `dc3843828724853459e911dcb347c050ee7ab018a3b853487789ffca495152ca`
 - `work/osc_check.py`: `34ff9367706607008d11f8c2fbd85574a69331425baf850d9abc9451e61ce54d`
 - `work/osc_evidence.py`: `b320e3d26eec5367d528bf04f5989252993253920bdfd2c87819b69bf8b46811`
 - `work/pll_check.py`: `347db45c393f696edcc2c9c56d3c7f31a6a0270336af37f3ef10189e22eee6f1`
-- `work/spi_check.py`: `82d6f8fcf2cd1a66f859b9cba60c46d4d878700f61f3103a54027f17cba84f8c`
-- `work/spi_evidence.py`: `6fdc1acc9dbd96648025dc37b2652057b137af2ebc11b865cd20e87497237480`
+- `work/spi_check.py`: `1820cccc8ed9922d355608e6a28d301d3462a3ac87b5a3a52b68e8eeef6389a1`
+- `work/spi_evidence.py`: `66ae2e512e2aac3cf60804df67a6b43ce30673432d6c57e9adeda8e0d7d5cd5e`
 - `work/spram_check.py`: `1f24e9fae379346b006c43c120fd6e53b63ee5b3af8f49ccaf4ef76f81cadb1a`
 - `work/tile_coverage_check.py`: `3e51871acced2979eeb7f31ae5849fb5d3666aea9e8a34054afe8ef7e5042694`
 

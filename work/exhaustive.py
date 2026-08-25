@@ -142,11 +142,10 @@ def spram_driver_state(ic):
 
 
 # Hard IP whose fabric outputs are gated by named ENABLE bits in icebox's cell
-# database.  Both blocks here have two instances, each with its own bits, and
-# in both cases the bits' layout differs between the instances -- which is why
-# every fixture places both.
-ENABLE_GATED_KINDS = ("I2C", "SPI")
-
+# database -- SB_I2C and SB_SPI.  Both have two instances, each with its own
+# bits, and in both cases the bits' layout differs between the instances, which
+# is why every fixture places both.
+#
 # The pattern that means "enabled", measured rather than assumed: nextpnr sets
 # every one of a placed instance's enable bits and leaves an absent instance's
 # clear.  For I2C that is two bits and for SPI four; `work/spi_evidence.py`
@@ -224,9 +223,12 @@ def enable_gated_driver_state(ic, icebox, kind, label):
     Gate and coverage boundary: the gate is the set of `<KIND>_ENABLE` bits the
     cell database names for that instance.  What those bits mean individually
     is not a public fact, and these fixtures cannot make it one: nextpnr sets
-    all of them together for a placed instance and none otherwise, whether the
-    block's serial inputs come from the dedicated pads or from fabric
-    registers.  A configuration setting only some of them is therefore reported
+    all of them together for a placed instance and none otherwise.  For I2C
+    that was checked with the serial inputs taken from the dedicated pads and
+    again from fabric registers, so the bits mark an enabled instance rather
+    than a pad mux; the SPI evidence uses fabric registers only, so for SPI
+    that particular distinction rests on the I2C result and not on its own
+    measurement.  A configuration setting only some of them is therefore reported
     by `enable_gated_undetermined()` and given no identity here -- and, because
     reporting alone would let the unknown be read as "no conflict", building a
     driver graph on one is refused outright.

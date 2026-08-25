@@ -62,8 +62,10 @@ route-probe: $(BUILD)/physical/route_candidate_1.bin
 $(BUILD)/physical/route_candidate_1.asc $(BUILD)/physical/route_candidate_1.bin $(BUILD)/physical/route_candidate_1.v &: $(BUILD)/leds.asc $(WORK)/mkrouteprobe.py $(WORK)/exhaustive.py $(WORK)/iceutil.py
 	$(PYTHON) $(WORK)/mkrouteprobe.py 4 27 2 50 $(BUILD)/physical/route_candidate_1 --source-asc $(BUILD)/leds.asc
 
-# PLL fixture: the only fixture here that instantiates hard IP, so the only one
-# that can exercise a source which is not a LUT, IO input, RAM read or DSP.
+# PLL fixture: the first of the hard-IP fixtures, and the one that established
+# the shape the others follow -- a source which is not a LUT, IO input, RAM
+# read or DSP, decoded from configuration rather than from a net name.
+# SPRAM, the oscillators, SB_I2C and SB_SPI have their own fixtures below.
 $(BUILD)/pll.json: $(WORK)/pll.v | $(BUILD)
 	$(YOSYS) -q -l $(BUILD)/pll_yosys.log -p 'synth_ice40 -json $@' $<
 

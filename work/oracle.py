@@ -495,6 +495,22 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
     return None
 
 
+def assert_distinct_hard_ip(*named_sources) -> None:
+    """Refuse any segment claimed by two hard-IP annotations.
+
+    Every pair is compared, not each new block against the older ones.  Tiles
+    (0,29) and (25,29) each carry outputs of two different blocks, so a wrong
+    ownership rule would show up here rather than as a wrong verdict.
+    """
+    for index, (name, sources) in enumerate(named_sources):
+        for other_name, other in named_sources[index + 1 :]:
+            clash = sources.keys() & other.keys()
+            if clash:
+                raise RuntimeError(
+                    f"{name} and {other_name} both claim {sorted(clash)}"
+                )
+
+
 def conflicting_nets(ic, icebox) -> int:
     """Rebuild the whole graph and count nets carrying more than one source."""
     total = 0
@@ -518,6 +534,18 @@ def conflicting_nets(ic, icebox) -> int:
     oscillator_sources = oscillator_driver_state(ic, pll_sources, icebox)
     i2c_sources = i2c_driver_state(ic, icebox)
     spi_sources = spi_driver_state(ic, icebox)
+    # `driver_identity` consults the hard-IP maps in a fixed order, so an
+    # overlap would not be reported as a conflict -- the first map queried
+    # would silently own the segment.  The model refuses to build a graph in
+    # that case; this file has to refuse independently, or the cross-check
+    # would inherit the model's guard instead of confirming it.
+    assert_distinct_hard_ip(
+        ("PLL", pll_sources),
+        ("SPRAM", spram_sources),
+        ("oscillator", oscillator_sources),
+        ("I2C", i2c_sources),
+        ("SPI", spi_sources),
+    )
     for segments in ic.group_segments():
         identities = {
             driver_identity(

@@ -495,7 +495,8 @@ oracle 全掃（本專案的 sweep machinery 只走 logic tile），所以這裡
 
 **覆蓋邊界（照這樣引用）**：只涵蓋兩個 `SB_I2C` instance 的 **15 個 fabric 輸出**，
 閘門是 db 指名的那組啟用位元。IP 的輸入、暫存器語意、以及單一啟用位元的意義都在邊界
-之外。**SPI 與 LEDDA 尚未建模；RGBA 無 fabric 輸出，故不適用於 driver graph。**
+之外。**SPI 已於同日建模（見下一節）；LEDDA 尚未建模（沒有啟用位元，不是 configuration
+事實）；RGBA 無 fabric 輸出，故不適用於 driver graph。**
 
 ### 硬 IP：SPI identity（2026-08-25）
 
@@ -514,8 +515,11 @@ build，約 10 秒）：
 
 1. **`BUS_ADDR74` 的合法值與 instance 對應**：`SB_SPI` 不是靠放置約束選 instance，
    而是 nextpnr 讀這個參數。**全部 16 個 4-bit 值都建一次**，結果由 placer 自己的報告
-   解析：只有 `0b0000` → `X0/Y0/spi_0`、`0b0010` → `X25/Y0/spi_1` 被接受，其餘 14 個
-   被明確拒絕（不是被默默改寫成別的 instance）。
+   解析：只有 `0b0000` → `X0/Y0/spi_0`、`0b0010` → `X25/Y0/spi_1` 被接受。
+   **被拒絕在哪一階段也一起釘住**（覆核意見）：另外 14 個**全部 synthesis 成功**、
+   **全部由 nextpnr 非零退出**、**錯誤訊息都是 `Invalid value for BUS_ADDR74`**。
+   只數存活者的話，就算它們其實早一步倒在 yosys，這份文件照樣會宣稱「placer 拒絕了
+   它們」—— 兩者是不同的主張。
 2. **「啟用」的位元向量是量出來的**：每個 instance 單獨建一次，讀回自己的四個位元＝
    `1111`、另一個 instance 的四個＝`0000`，而完全沒有 SPI 的設計八個位元全是 `0`。
    少了後兩項對照，「位元是 1」也可能只是它恆為 1。
@@ -550,6 +554,13 @@ tile 裡，凡是「單一位元翻轉會新增或移除至少一條**碰到 SPI
 **零歧異，而且兩個方向都檢查了** —— 先用 model 陽性篩選的話，模型自己判為乾淨的那
 551 個永遠不會被檢定（本專案的偽陰性都是這個形狀）。16 workers 約 2 分鐘。
 
+**⚠ 母集合本身也不能是共用假設（覆核意見）**：第一版用 model 的 `tile_model()` 列出
+601 個座標，再把同一批交給兩邊 —— 那麼「列舉」就成了雙方共用的前提，**等量替換座標
+仍會全綠**（只釘 601 與 550/50/1 三個數字擋不住）。現在用 **oracle 自己的
+`tile_routing_entries()` 重新列舉一次**，兩份做**雙向集合比對**，而且連每個翻轉
+**新增／移除哪些 route 的正規化 signature** 都比。實測：601 vs 601、雙向差集空、
+signature 全同。拿掉一個座標或改掉一條 route 都會讓對應的檢查變紅（實測過）。
+
 **結構事實（順帶釘住）**：SPI 端點在 routing 表裡**只當來源，從不當目的端**
 （648 次作為來源、0 次作為目的端）。
 
@@ -558,12 +569,19 @@ tile 裡，凡是「單一位元翻轉會新增或移除至少一條**碰到 SPI
 oracle 都報 undetermined、都不給 identity、而且**都拒絕給出判決**；對照組是「四個全清
 ＝off」，判決層照常運作。這些位元同樣都在 IO tile，sweep 碰不到。
 
-**歸屬守衛改成通用的兩兩比對**：原本只拿 I2C 去對其他三個 source map，現在 PLL／SPRAM／
-oscillator／I2C／SPI 五者**每一對**都比。守衛的鑑別力測試同 I2C：在振盪器 fixture 上
-注入一個 SPI 對 `(25,29,slf_op_0)` 的宣稱，必須拋 `RuntimeError`。
+**歸屬守衛改成通用的兩兩比對，而且 model 與 oracle 各有一套**：原本只拿 I2C 去對其他
+三個 source map，現在 PLL／SPRAM／oscillator／I2C／SPI 五者**每一對**都比。
+**⚠ 覆核抓到：這道守衛原本只存在於 model**，而 oracle 的 `driver_identity()` 是**按固定
+查詢順序**取第一個命中的硬 IP map —— 重疊時它會安靜地選一個，於是交叉驗證等於繼承了
+model 的守衛而不是印證它。實測（把守衛拿掉後注入重疊宣稱）**oracle 確實安靜回傳 0**。
+現在 `oracle.conflicting_nets()` 自己做兩兩交集檢查，並用**同一個 LFOSC 注入案例**
+（`(25,29,slf_op_0)`）釘住它必須拒絕，撤回注入後又能正常計數。
 
 **覆蓋邊界（照這樣引用）**：只涵蓋兩個 `SB_SPI` instance 的 **25 個 fabric 輸出**，
 閘門是 db 指名的那組啟用位元。IP 的輸入、暫存器語意、單一啟用位元的意義都在邊界之外。
+另外一項限縮：I2C 那邊「啟用位元標記的是 instance 而不是 pad mux」有**專用腳位與 fabric
+暫存器兩種設計**各建一次作為證據；**SPI 的證據只用了 fabric 暫存器**，所以 SPI 這一點是
+沿用 I2C 的結果，不是自己量到的。
 LEDDA 已盤點但啟用狀態不是 configuration 事實，未建模；RGBA 無 fabric 輸出、不適用。
 
 ## 3. Decode、readback 與獨立性

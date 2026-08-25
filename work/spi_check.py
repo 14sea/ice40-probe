@@ -170,6 +170,68 @@ def structural_candidates(ic, endpoints):
     return candidates
 
 
+def oracle_side_candidates(ic, endpoints):
+    """The same class, enumerated through oracle.tile_routing_entries().
+
+    `structural_candidates` reads the tile database through the model's
+    `tile_model()`.  Building one list and handing it to both sides makes the
+    class itself a shared assumption: an enumeration that dropped coordinates,
+    or swapped one set for another of equal size, would keep every count in
+    this file green.  This walks the same tiles through the oracle's reader
+    instead, and the two lists are compared as sets, including the routes each
+    flip moves.
+    """
+    candidates = {}
+    for x, y in sorted({(sx, sy) for sx, sy, _n in endpoints}):
+        entries, bit_to_entries = oracle.tile_routing_entries(ic, x, y)
+        tile = ic.tile(x, y)
+        for row, line in enumerate(tile):
+            for column, value in enumerate(line):
+                bit_name = f"B{row}[{column}]"
+                if bit_name not in bit_to_entries:
+                    continue
+                bits = signed_tile_bits(tile)
+                changed = set(bits)
+                if value == "1":
+                    changed.discard(bit_name)
+                    changed.add(f"!{bit_name}")
+                else:
+                    changed.discard(f"!{bit_name}")
+                    changed.add(bit_name)
+                additions, removals = [], []
+                for index in bit_to_entries[bit_name]:
+                    entry = entries[index]
+                    was = all(bit in bits for bit in entry[0])
+                    now = all(bit in changed for bit in entry[0])
+                    if now and not was:
+                        additions.append((entry[2], entry[3]))
+                    elif was and not now:
+                        removals.append((entry[2], entry[3]))
+                if not additions and not removals:
+                    continue
+                if not any(
+                    (x, y, left) in endpoints or (x, y, right) in endpoints
+                    for left, right in additions + removals
+                ):
+                    continue
+                candidates[(x, y, bit_name)] = (
+                    tuple(sorted(additions)),
+                    tuple(sorted(removals)),
+                )
+    return candidates
+
+
+def route_signature(candidates):
+    """`(tile, bit) -> (added routes, removed routes)`, order-independent."""
+    return {
+        (x, y, bit_name): (
+            tuple(sorted((entry[2], entry[3]) for entry in additions)),
+            tuple(sorted((entry[2], entry[3]) for entry in removals)),
+        )
+        for x, y, _row, _column, bit_name, additions, removals in candidates
+    }
+
+
 def _worker_setup(asc: str) -> None:
     global _ICEBOX, _IC
     _ICEBOX = load_icebox()
@@ -346,6 +408,35 @@ def main() -> int:
         fired and "slf_op_0" in message,
         message or "no RuntimeError raised",
     )
+    # The oracle needs its own guard, or the cross-check would inherit the
+    # model's: `driver_identity` queries the hard-IP maps in a fixed order, so
+    # an overlap would resolve silently to whichever map is consulted first.
+    original_oracle_state = oracle.spi_driver_state
+
+    def oracle_with_overlapping_claim(ic_arg, icebox_arg=None):
+        state = original_oracle_state(ic_arg, icebox_arg)
+        state[contested] = ("spi", 25, 0, "INJECTED")
+        return state
+
+    oracle.spi_driver_state = oracle_with_overlapping_claim
+    try:
+        icebox_or, ic_or = load(OSC_ASC)
+        oracle_fired, oracle_message = raises(
+            lambda: conflicting_nets(ic_or, icebox_or)
+        )
+    finally:
+        oracle.spi_driver_state = original_oracle_state
+    check(
+        "the oracle refuses the same overlap independently",
+        oracle_fired and "slf_op_0" in oracle_message,
+        oracle_message or "the oracle counted conflicts anyway",
+    )
+    icebox_clean, ic_clean = load(OSC_ASC)
+    check(
+        "and counts normally again once the claim is withdrawn",
+        conflicting_nets(ic_clean, icebox_clean) == 0,
+        "so the refusal is caused by the overlap, not by the fixture",
+    )
 
     # --- known positives ------------------------------------------------------
     for label, x, y, bit_name, source, destination, identity, partner in POSITIVES:
@@ -469,6 +560,26 @@ def main() -> int:
         "and it contains removals and an add+remove case, not just additions",
         shapes == {"adds only": 550, "removals only": 50, "both": 1},
         f"{shapes}",
+    )
+    # Counting is not enough: an enumeration that swapped one coordinate for
+    # another would keep the count.  The class is therefore re-derived through
+    # the oracle's own tile reader and compared as a set, routes included.
+    model_side = route_signature(candidates)
+    oracle_side = oracle_side_candidates(ic_s, set(graph_s.spi_sources))
+    check(
+        "the oracle's own reader enumerates the same class, both directions",
+        model_side.keys() == oracle_side.keys(),
+        f"model-only {sorted(model_side.keys() - oracle_side.keys())[:3]}, "
+        f"oracle-only {sorted(oracle_side.keys() - model_side.keys())[:3]}",
+    )
+    differing = [
+        key for key in model_side.keys() & oracle_side.keys()
+        if model_side[key] != oracle_side[key]
+    ]
+    check(
+        "and agrees on which routes every one of them moves",
+        not differing,
+        f"{[(key, model_side[key], oracle_side[key]) for key in differing[:2]]}",
     )
     base = conflicting_nets(ic_s, icebox_s)
     with Pool(

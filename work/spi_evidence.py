@@ -93,8 +93,15 @@ def check(label: str, ok: bool, detail: str = "") -> None:
         failures.append(label)
 
 
-def build(name: str, verilog: str):
-    """Synthesise and place one design; return its ASC path or None."""
+def build(name: str, verilog: str) -> dict:
+    """Synthesise and place one design, recording where it stopped.
+
+    Which stage rejects a design is part of the claim: "the placer refuses the
+    other fourteen values" is a different statement from "they do not build",
+    and a check that only counts the survivors cannot tell the two apart.  So
+    the synthesis result, the placer's exit status and its error line are all
+    returned, and asserted separately below.
+    """
     BUILD.mkdir(parents=True, exist_ok=True)
     (BUILD / f"{name}.v").write_text(verilog, encoding="utf-8")
     (BUILD / f"{name}.pcf").write_text(PCF, encoding="utf-8")
@@ -103,8 +110,16 @@ def build(name: str, verilog: str):
          f"synth_ice40 -json {BUILD / f'{name}.json'}", str(BUILD / f"{name}.v")],
         capture_output=True, text=True,
     )
+    result = {
+        "synthesised": synthesis.returncode == 0,
+        "placer_status": None,
+        "error": "",
+        "asc": None,
+        "placement": "",
+    }
     if synthesis.returncode:
-        return None, "yosys rejected the design"
+        result["error"] = "yosys rejected the design"
+        return result
     placement = subprocess.run(
         ["nextpnr-ice40", "--up5k", "--package", "sg48",
          "--json", str(BUILD / f"{name}.json"), "--pcf", str(BUILD / f"{name}.pcf"),
@@ -113,11 +128,15 @@ def build(name: str, verilog: str):
         capture_output=True, text=True,
     )
     log = (BUILD / f"{name}_pnr.log").read_text(encoding="utf-8")
+    result["placer_status"] = placement.returncode
     if placement.returncode:
         error = re.search(r"ERROR: (.+)", log)
-        return None, error.group(1).strip() if error else "nextpnr failed"
+        result["error"] = error.group(1).strip() if error else "nextpnr failed"
+        return result
     located = re.search(r"constrained SB_SPI '\w+' to (\S+)", log)
-    return BUILD / f"{name}.asc", located.group(1) if located else "?"
+    result["asc"] = BUILD / f"{name}.asc"
+    result["placement"] = located.group(1) if located else "?"
+    return result
 
 
 def main() -> int:
@@ -125,15 +144,33 @@ def main() -> int:
     cells = dict(enable_gated_cells(icebox, "SPI"))
 
     print("=== BUS_ADDR74: every four-bit value, built ===")
-    accepted = {}
+    results = {}
     for value in range(16):
         parameter = f"0b{value:04b}"
-        asc, detail = build(
+        results[parameter] = build(
             f"bus_{value:04b}", ONE_SPI % {"bus_address": parameter}
         )
-        if asc is not None:
-            accepted[parameter] = (asc, detail)
-        print(f"  {parameter}: {'placed at ' + detail if asc else 'rejected -- ' + detail}")
+        outcome = results[parameter]
+        print(
+            f"  {parameter}: "
+            + (
+                f"placed at {outcome['placement']}"
+                if outcome["asc"]
+                else f"rejected at "
+                f"{'synthesis' if not outcome['synthesised'] else 'placement'}"
+                f" -- {outcome['error']}"
+            )
+        )
+    accepted = {
+        parameter: outcome
+        for parameter, outcome in results.items()
+        if outcome["asc"] is not None
+    }
+    rejected = {
+        parameter: outcome
+        for parameter, outcome in results.items()
+        if outcome["asc"] is None
+    }
     check(
         "exactly two values are accepted",
         sorted(accepted) == sorted(EXPECTED_PLACEMENTS),
@@ -141,16 +178,33 @@ def main() -> int:
     )
     check(
         "and each selects the instance the database describes",
-        {name: place for name, (_asc, place) in accepted.items()}
+        {name: outcome["placement"] for name, outcome in accepted.items()}
         == EXPECTED_PLACEMENTS,
-        f"{ {name: place for name, (_a, place) in accepted.items()} }",
+        f"{ {name: outcome['placement'] for name, outcome in accepted.items()} }",
     )
-    # The fourteen refusals matter: they are why a fixture cannot pick an
-    # instance by placement constraint and has to carry these two values.
+    # The fourteen refusals matter -- they are why a fixture cannot pick an
+    # instance by placement constraint -- and *where* they are refused matters
+    # too.  Counting survivors alone would report "the placer refuses them"
+    # even if they had failed one stage earlier, in synthesis.
     check(
-        "the other fourteen are refused by the placer, not silently remapped",
-        len(accepted) == 2,
-        f"{16 - len(accepted)} refused",
+        "the other fourteen all synthesise",
+        all(outcome["synthesised"] for outcome in rejected.values()),
+        f"{sorted(name for name, o in rejected.items() if not o['synthesised'])}",
+    )
+    check(
+        "and are then refused by the placer, with a non-zero exit",
+        len(rejected) == 14
+        and all(outcome["placer_status"] for outcome in rejected.values()),
+        f"{len(rejected)} rejected, statuses "
+        f"{sorted({outcome['placer_status'] for outcome in rejected.values()})}",
+    )
+    check(
+        "each for this parameter, not for some unrelated reason",
+        all(
+            "Invalid value for BUS_ADDR74" in outcome["error"]
+            for outcome in rejected.values()
+        ),
+        f"{sorted({outcome['error'][:48] for outcome in rejected.values()})}",
     )
 
     print("\n=== the enable vector, read back from each instance alone ===")
@@ -158,9 +212,9 @@ def main() -> int:
         "0b0000": (0, 0, 0),
         "0b0010": (25, 0, 1),
     }
-    for parameter, (asc, _place) in sorted(accepted.items()):
+    for parameter, outcome in sorted(accepted.items()):
         active = icebox.iceconfig()
-        active.read_file(str(asc))
+        active.read_file(str(outcome["asc"]))
         placed = placement_for_parameter[parameter]
         for placement, cell in sorted(cells.items()):
             bits = enable_gated_enable_bits(cell, "SPI")

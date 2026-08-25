@@ -185,8 +185,8 @@ not security research, it does not analyse undocumented bitstream content, and
 it is not chip reverse engineering.  Where this project's own coverage is
 partial that is stated rather than glossed over: the sweeps enumerate only flips
 that enable a routing path in non-empty logic tiles, hard-IP coverage extends to
-one PLL configuration, one SPRAM instance, the two oscillators and both SB_I2C
-instances, both SB_I2C instances and both SB_SPI instances, LEDDA is
+one PLL configuration, one SPRAM instance, the two oscillators, both SB_I2C
+instances and both SB_SPI instances, LEDDA is
 surveyed but not modelled because its enable state is not a configuration fact,
 RGBA is not applicable to the driver graph, and no claim here has ever been
 checked against silicon.
