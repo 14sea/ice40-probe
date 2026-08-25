@@ -500,9 +500,11 @@ def main() -> int:
         "Coverage boundary: the fifteen fabric outputs of each of the two "
         "SB_I2C instances, gated on the enable bits the cell database names.  "
         "The IP's inputs, its register semantics, and what either enable bit "
-        "means on its own are outside it.  SPI, LEDDA and the RGB drivers "
-        "remain unmodelled; LEDDA in particular has no enabling bit at all, so "
-        "its state is not a configuration fact."
+        "means on its own are outside it.  SPI and LEDDA are surveyed but not "
+        "modelled -- LEDDA in particular has no enabling bit at all, so its "
+        "state is not a configuration fact -- and SB_RGBA_DRV has no "
+        "fabric-facing output, so it is not applicable to the driver graph "
+        "rather than missing from it."
     )
     return 0
 

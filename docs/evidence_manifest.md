@@ -21,17 +21,17 @@ from quoting an earlier run.
 - `work/decode_vlog.py`: `a7c261fa8a07c8e3c46f7928001cdc580753567fa9ed9b4e44d59f0052a8507e`
 - `work/exhaustive.py`: `b3d77dcfe9b4a1ca407231ed703b9e2f71b759a88e14bef151a0636d1d2789d6`
 - `work/hard_ip_inventory.py`: `86c7769edf1dbe2b3a8d068d4087a469a9a98b3b48490e4d7ffab4533527dd54`
-- `work/i2c_check.py`: `b06a1ddbbfd0329dfcdc530243ddefa5e47a499025d7e456e1edf317aa257487`
+- `work/i2c_check.py`: `a86da239926926f790c2983d65e0909d19f07b67bf7a01932c4037b10865d461`
 - `work/iceutil.py`: `5bfa02b31e4c7992e80e24b8d8b87c4158f35cf663c53547f41d99a892e88439`
 - `work/manifest.py`: `3bbb7245eefcb4fb3bc9af5bb21fbf05f97f6dbfbddd7359f63fcd9dd5ce3c71`
 - `work/mkprobe.py`: `9628968cdd51b324084a0646e65962b5c474c24bcac938ba892a16ecbd274d0c`
 - `work/mkrouteprobe.py`: `795f3f411d4fd8637b5dca344ac458a405ba419abd273e52874df373b804e41d`
 - `work/muxmodel.py`: `30e484330728e8b5eb562a59ebcfb18d7f625a7ae1abc68e8dfe475fbff774e9`
-- `work/oracle.py`: `cd814fff84d2810053f131d2ab86a2a8c125b62de138e9fac21e8cdb641d0670`
-- `work/osc_check.py`: `01064bdbd8de2bd74578d4f31ebe195fa667867e9d6971c70308acb04344939d`
+- `work/oracle.py`: `b1af0aae0c70c52216c1f008c6540f362e4819d272ced7ce1cd743fa713612ef`
+- `work/osc_check.py`: `8a8291a41fba500d2fb52985e79a0317aa4cf9f25264d8783f58412da6562919`
 - `work/osc_evidence.py`: `b320e3d26eec5367d528bf04f5989252993253920bdfd2c87819b69bf8b46811`
-- `work/pll_check.py`: `6ba3500bebeec96a5cc6bc09f987d632f33126d3e595332a67c23696c289b7b0`
-- `work/spram_check.py`: `179114f2251a8fd62a3f99efcec3503b4976d480ced1e0a1c313228ed5cadf30`
+- `work/pll_check.py`: `c9c0add6b7e66869a3c27f2934656aa69e41261cb3b794fb2611528b4256089a`
+- `work/spram_check.py`: `66608e5b01d026c928ea2f9ae2cc7cb7068f87b92db30c08f5f9b9a185dd83b3`
 - `work/tile_coverage_check.py`: `d8840b3b87d771821f43d9114e90a47982599dfb040338b2dd41bbd37b96f173`
 
 ## Hard-IP fixtures

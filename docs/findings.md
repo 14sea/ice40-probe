@@ -161,8 +161,9 @@ oracle 完全一致。
 **「偽陰性已關閉」的正確範圍**：指增量模型相對於**全圖重建**沒有偽陰性，且是在同一份
 database 與同一組 driver identity 假設之下。**不能外推成「矽上沒有偽陰性」。**
 
-**仍未涵蓋**：driver whitelist 以外的硬 IP（SPI、LEDDA、RGB 驅動器；PLL、oscillator
-與 I2C 已有專屬 fixture，見上文，但覆蓋仍是部分的）。**更根本的是**：model 與 oracle 共用
+**仍未涵蓋**：driver whitelist 以外的硬 IP —— **SPI 與 LEDDA 尚未建模**；
+**RGBA 沒有 fabric 輸出，因此不適用於 driver graph**（不是「尚未建模」，見盤點一節）。
+PLL、oscillator 與 I2C 已有專屬 fixture，見上文，但覆蓋仍是部分的。**更根本的是**：model 與 oracle 共用
 同一個 IceStorm database，兩者一致**只代表內部結構一致，不能排除資料庫本身的錯誤**。
 （此處原本引「`CLKHF_DIV` 完全不進 ASC」當作資料庫缺口的例子 —— **那個說法已於
 2026-08-23 撤回**，該除頻值就編碼在 `dsp1_tile (0,16)`，錯的是我當初的 tile 列舉，
@@ -293,7 +294,8 @@ driver，這個陽性就構造不出來。
 **覆蓋邊界（必須照這樣引用）**：只驗過 **HFOSC**。LFOSC 的全域對應的 `fabout` 位於
 io tile `(12,0)`，而 **sg48 封裝沒有把該 tile 的任何 block 接出來**，因此無法把 LUT
 輸出帶到那顆 mux，也就構造不出第二個來源 —— 這是封裝限制，不是模型缺陷。I2C 已於
-2026-08-25 建立 identity（見下文）；其餘硬 IP（SPI、LEDDA、RGB 驅動器）仍未建模。
+2026-08-25 建立 identity（見下文）；SPI 與 LEDDA 仍未建模，RGBA 無 fabric 輸出、
+不適用於 driver graph。
 
 **⚠ 一項已撤回的錯誤結論**：本文件先前寫過「`CLKHF_DIV` 在 ASC 裡完全沒有表示」。
 **那是錯的。** 它編碼在 **`dsp1_tile (0,16)` 的兩個 IpConfig 位元**（`CBIT_3` = 低位
@@ -492,7 +494,7 @@ oracle 全掃（本專案的 sweep machinery 只走 logic tile），所以這裡
 
 **覆蓋邊界（照這樣引用）**：只涵蓋兩個 `SB_I2C` instance 的 **15 個 fabric 輸出**，
 閘門是 db 指名的那組啟用位元。IP 的輸入、暫存器語意、以及單一啟用位元的意義都在邊界
-之外。SPI、LEDDA 與 RGB 驅動器仍未建模。
+之外。**SPI 與 LEDDA 尚未建模；RGBA 無 fabric 輸出，故不適用於 driver graph。**
 
 ## 3. Decode、readback 與獨立性
 

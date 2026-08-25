@@ -21,8 +21,10 @@ not independently tested here.
 network, not a source.  When configuration connects a PLL or oscillator output
 to one, that block's identity is annotated on the passive endpoint.  PLL,
 SPRAM, both oscillators (global and direct fabric outputs) and both SB_I2C
-instances are modelled; SPI, LEDDA and the RGB drivers are not -- see the
-coverage note printed at the end of a run.
+instances are modelled.  SPI and LEDDA are surveyed but not modelled;
+SB_RGBA_DRV has no fabric-facing output, so it is not applicable to this graph
+rather than missing from it -- see the coverage note printed at the end of a
+run.
 
 The full adds-only sweep over `leds` is ~49k rebuilds, so runs are resumable:
 every checked flip is appended to a JSONL result file that also records the ASC
@@ -754,8 +756,8 @@ def main() -> int:
     print(
         "\nDriver identities: LUT/IO-input/RAM-read/UP5K-DSP/PLL/SPRAM/oscillator"
         "/SB_I2C outputs.  glb_netwk_* is a distribution network and is not "
-        "counted as a source; SPI, LEDDA and the RGB drivers remain outside "
-        "this oracle's coverage."
+        "counted as a source; SPI and LEDDA remain outside this oracle's "
+        "coverage, and SB_RGBA_DRV has no fabric-facing output to cover."
     )
     return 1 if disagreements else 0
 
