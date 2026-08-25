@@ -1,0 +1,7 @@
+# Constraints used by work/spi.v.  The SPI pins are not constrained: the
+# fixture drives SI/SCKI/SCSNI/MI from fabric registers, so that the enabling
+# bits cannot be confused with a dedicated-pad mux.
+set_io clk 35
+set_io LED_R 40
+set_io LED_G 41
+set_io LED_B 39

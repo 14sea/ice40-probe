@@ -10,9 +10,12 @@ IVERILOG ?= iverilog
 VVP ?= vvp
 PYTHON ?= python3
 ORACLE_WORKERS ?= 16
+# Enumerated, never hand-listed: a hand-written list is how this project twice
+# lost track of something it should have covered.
+PY_SOURCES := $(wildcard $(WORK)/*.py)
 export PYTHONPYCACHEPREFIX := $(abspath $(BUILD)/pycache)
 
-.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check osc-evidence tile-coverage guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-full oracle-dense-addrem manifest archive verify-repro versions clean
+.PHONY: all probes route-probe pll pll-check spram spram-check osc osc-check osc-evidence i2c i2c-check spi spi-check spi-evidence rgba rgba-check tile-coverage carry-check hard-ip-inventory guarded guarded-test guarded-route-probe test analyze check-analysis oracle-leds oracle-leds-full oracle-leds-report oracle-leds-addrem oracle-dense-full oracle-dense-addrem manifest manifest-check archive verify-repro versions clean
 
 all: $(BUILD)/leds.bin $(BUILD)/dense.asc probes
 
@@ -59,8 +62,10 @@ route-probe: $(BUILD)/physical/route_candidate_1.bin
 $(BUILD)/physical/route_candidate_1.asc $(BUILD)/physical/route_candidate_1.bin $(BUILD)/physical/route_candidate_1.v &: $(BUILD)/leds.asc $(WORK)/mkrouteprobe.py $(WORK)/exhaustive.py $(WORK)/iceutil.py
 	$(PYTHON) $(WORK)/mkrouteprobe.py 4 27 2 50 $(BUILD)/physical/route_candidate_1 --source-asc $(BUILD)/leds.asc
 
-# PLL fixture: the only fixture here that instantiates hard IP, so the only one
-# that can exercise a source which is not a LUT, IO input, RAM read or DSP.
+# PLL fixture: the first of the hard-IP fixtures, and the one that established
+# the shape the others follow -- a source which is not a LUT, IO input, RAM
+# read or DSP, decoded from configuration rather than from a net name.
+# SPRAM, the oscillators, SB_I2C and SB_SPI have their own fixtures below.
 $(BUILD)/pll.json: $(WORK)/pll.v | $(BUILD)
 	$(YOSYS) -q -l $(BUILD)/pll_yosys.log -p 'synth_ice40 -json $@' $<
 
@@ -96,7 +101,15 @@ $(BUILD)/osc.asc: $(BUILD)/osc.json $(WORK)/osc.pcf
 
 osc: $(BUILD)/osc.asc
 
-tile-coverage: $(BUILD)/leds.asc $(BUILD)/dense.asc $(BUILD)/pll.asc $(BUILD)/spram.asc $(BUILD)/osc.asc $(WORK)/tile_coverage_check.py $(WORK)/iceutil.py
+carry-check: $(BUILD)/leds.asc $(BUILD)/dense.asc $(WORK)/carry_check.py $(WORK)/exhaustive.py
+	$(PYTHON) $(WORK)/carry_check.py
+
+# Survey step for the hard-IP milestone: decides whether a fixture is warranted
+# before any identity is written.  Host-only; builds four designs.
+hard-ip-inventory: $(WORK)/hard_ip_inventory.py $(WORK)/exhaustive.py
+	$(PYTHON) $(WORK)/hard_ip_inventory.py
+
+tile-coverage: $(BUILD)/leds.asc $(BUILD)/dense.asc $(BUILD)/pll.asc $(BUILD)/spram.asc $(BUILD)/osc.asc $(BUILD)/i2c.asc $(BUILD)/spi.asc $(BUILD)/rgba.asc $(WORK)/tile_coverage_check.py $(WORK)/carry_check.py $(WORK)/hard_ip_inventory.py $(WORK)/iceutil.py
 	$(PYTHON) $(WORK)/tile_coverage_check.py
 
 osc-evidence: $(WORK)/osc_evidence.py $(WORK)/exhaustive.py $(WORK)/oracle.py
@@ -104,6 +117,54 @@ osc-evidence: $(WORK)/osc_evidence.py $(WORK)/exhaustive.py $(WORK)/oracle.py
 
 osc-check: $(BUILD)/osc.asc $(BUILD)/leds.asc $(BUILD)/pll.asc $(WORK)/osc_check.py $(WORK)/exhaustive.py $(WORK)/oracle.py
 	$(PYTHON) $(WORK)/osc_check.py $<
+
+# I2C fixture: fourth hard-IP fixture, and the first written after the hard-IP
+# inventory.  Fifteen fabric outputs per instance leave through ipcon-tile
+# slf_op_* segments; both instances are placed because their enabling bits are
+# laid out differently.
+$(BUILD)/i2c.json: $(WORK)/i2c.v | $(BUILD)
+	$(YOSYS) -q -l $(BUILD)/i2c_yosys.log -p 'synth_ice40 -json $@' $<
+
+$(BUILD)/i2c.asc: $(BUILD)/i2c.json $(WORK)/i2c.pcf
+	$(NEXTPNR) --up5k --package sg48 --json $< --pcf $(WORK)/i2c.pcf --asc $@ --freq 12 --log $(BUILD)/i2c_pnr.log
+
+i2c: $(BUILD)/i2c.asc
+
+i2c-check: $(BUILD)/i2c.asc $(BUILD)/leds.asc $(BUILD)/osc.asc $(WORK)/i2c_check.py $(WORK)/exhaustive.py $(WORK)/oracle.py
+	$(PYTHON) $(WORK)/i2c_check.py $<
+
+# SPI fixture: fifth hard-IP fixture.  Twenty-five fabric outputs per instance
+# -- the inventory's first figure of nineteen was a property of its own Verilog
+# -- and both instances are placed because their four enable bits are split
+# across different IO tiles.
+$(BUILD)/spi.json: $(WORK)/spi.v | $(BUILD)
+	$(YOSYS) -q -l $(BUILD)/spi_yosys.log -p 'synth_ice40 -json $@' $<
+
+$(BUILD)/spi.asc: $(BUILD)/spi.json $(WORK)/spi.pcf
+	$(NEXTPNR) --up5k --package sg48 --json $< --pcf $(WORK)/spi.pcf --asc $@ --freq 12 --log $(BUILD)/spi_pnr.log
+
+spi: $(BUILD)/spi.asc
+
+# BUS_ADDR74 mapping and the enable vector, rebuilt over all sixteen values.
+spi-evidence: $(BUILD)/leds.asc $(WORK)/spi_evidence.py $(WORK)/exhaustive.py
+	$(PYTHON) $(WORK)/spi_evidence.py
+
+spi-check: $(BUILD)/spi.asc $(BUILD)/leds.asc $(BUILD)/osc.asc $(BUILD)/i2c.asc $(WORK)/spi_check.py $(WORK)/exhaustive.py $(WORK)/oracle.py
+	$(PYTHON) $(WORK)/spi_check.py $<
+
+# RGBA: the negative case.  No fixture identity is built for it -- the block
+# has no output that enters the fabric -- so what is regression-tested is that
+# negative, on an exhaustive count of the block's database ports.
+$(BUILD)/rgba.json: $(WORK)/rgba.v | $(BUILD)
+	$(YOSYS) -q -l $(BUILD)/rgba_yosys.log -p 'synth_ice40 -json $@' $<
+
+$(BUILD)/rgba.asc: $(BUILD)/rgba.json $(WORK)/rgba.pcf
+	$(NEXTPNR) --up5k --package sg48 --json $< --pcf $(WORK)/rgba.pcf --asc $@ --freq 12 --log $(BUILD)/rgba_pnr.log
+
+rgba: $(BUILD)/rgba.asc
+
+rgba-check: $(BUILD)/rgba.asc $(BUILD)/leds.asc $(BUILD)/i2c.asc $(BUILD)/spi.asc $(WORK)/rgba_check.py $(WORK)/exhaustive.py $(WORK)/oracle.py
+	$(PYTHON) $(WORK)/rgba_check.py $<
 
 guarded: $(BUILD)/guarded.bin $(BUILD)/guarded_rt.v
 
@@ -139,12 +200,12 @@ $(BUILD)/test_mut2.vvp: $(BUILD)/leds_mut2_sim.v $(WORK)/tb.v
 $(BUILD)/test_mut3.vvp: $(BUILD)/leds_mut3_sim.v $(WORK)/tb.v
 	$(IVERILOG) -g2012 -Wall -DEXPECT_MUT3 -o $@ $^
 
-test: tile-coverage pll-check spram-check osc-check osc-evidence guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
+test: tile-coverage carry-check pll-check spram-check osc-check i2c-check spi-check rgba-check osc-evidence spi-evidence manifest-check guarded-test $(BUILD)/test_baseline.vvp $(BUILD)/test_mut2.vvp $(BUILD)/test_mut3.vvp $(BUILD)/leds_rt.v check-analysis
 	$(VVP) $(BUILD)/test_baseline.vvp
 	$(VVP) $(BUILD)/test_mut2.vvp
 	$(VVP) $(BUILD)/test_mut3.vvp
 	! $(PYTHON) $(WORK)/mkprobe.py 4 30 6 $(BUILD)/negative_mut2 --source-asc $(BUILD)/leds.asc --baseline-vlog $(BUILD)/leds_rt.v
-	$(PYTHON) -m py_compile $(WORK)/iceutil.py $(WORK)/bitclass.py $(WORK)/muxmodel.py $(WORK)/exhaustive.py $(WORK)/mkprobe.py $(WORK)/mkrouteprobe.py $(WORK)/decode_vlog.py $(WORK)/oracle.py $(WORK)/pll_check.py $(WORK)/spram_check.py $(WORK)/osc_check.py $(WORK)/osc_evidence.py $(WORK)/tile_coverage_check.py
+	$(PYTHON) -m py_compile $(PY_SOURCES)
 
 analyze: $(BUILD)/leds.asc $(BUILD)/dense.asc
 	$(PYTHON) $(WORK)/bitclass.py $(BUILD)/leds.asc 20000 > $(BUILD)/bitclass.txt
@@ -204,12 +265,19 @@ oracle-dense-addrem: $(BUILD)/dense.asc
 manifest:
 	$(PYTHON) $(WORK)/manifest.py
 
+# Freshness gate.  Without it a stale manifest is invisible: `make test` stays
+# green while the manifest describes model sources that no longer exist.  Only
+# the tracked-tree sections are checkable -- the sweep results are untracked.
+manifest-check: $(WORK)/manifest.py
+	$(PYTHON) $(WORK)/manifest.py --self-test
+	$(PYTHON) $(WORK)/manifest.py --check
+
 archive:
 	mkdir -p $(RESULTS)/archive
 	for f in $(RESULTS)/*.jsonl; do gzip -9 -c "$$f" > $(RESULTS)/archive/$$(basename $$f).gz; done
 	cd $(RESULTS)/archive && sha256sum *.gz > SHA256SUMS
 
-verify-repro: all pll-check spram-check osc-check
+verify-repro: all pll-check spram-check osc-check i2c-check spi-check rgba-check
 	cmp $(WORK)/leds.asc $(BUILD)/leds.asc
 	cmp $(WORK)/dense.asc $(BUILD)/dense.asc
 	cmp $(WORK)/leds.bin $(BUILD)/leds.bin
@@ -222,6 +290,10 @@ verify-repro: all pll-check spram-check osc-check
 	cmp $(WORK)/spram.asc $(BUILD)/spram.asc
 	cmp $(WORK)/osc.asc $(BUILD)/osc.asc
 	cmp $(WORK)/osc_selector.asc $(BUILD)/osc_selector.asc
+	cmp $(WORK)/osc_fabric_selector.asc $(BUILD)/osc_fabric_selector.asc
+	cmp $(WORK)/i2c.asc $(BUILD)/i2c.asc
+	cmp $(WORK)/spi.asc $(BUILD)/spi.asc
+	cmp $(WORK)/rgba.asc $(BUILD)/rgba.asc
 
 versions:
 	$(YOSYS) -V

@@ -1,0 +1,7 @@
+# Constraints used by work/i2c.v.  SCL/SDA are not constrained: the fixture
+# drives SCLI/SDAI from fabric registers, so that the enabling bits cannot be
+# confused with a dedicated-pad mux.
+set_io clk 35
+set_io LED_R 40
+set_io LED_G 41
+set_io LED_B 39

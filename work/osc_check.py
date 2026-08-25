@@ -34,10 +34,12 @@ import sys
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import exhaustive  # noqa: E402
 from exhaustive import GlobalDriverGraph, tile_model  # noqa: E402
 from iceutil import load_icebox, signed_tile_bits  # noqa: E402
 from oracle import (  # noqa: E402
     conflicting_nets,
+    oscillator_fabric_endpoints,
     driver_identity,
     oscillator_driver_state,
     pll_driver_state,
@@ -47,7 +49,12 @@ from pll_check import enabled_routes  # noqa: E402
 
 ASC = Path(sys.argv[1] if len(sys.argv) > 1 else "build/osc.asc")
 SELECTOR_ASC = ASC.with_name("osc_selector.asc")
+FABRIC_SELECTOR_ASC = ASC.with_name("osc_fabric_selector.asc")
 PROBE_TILE = (12, 31)
+# The oscillator's other output.  The pre-set drives a span that reaches the
+# HFOSC fabric segment's destination; the flip then puts the oscillator on it.
+FABRIC_PRESET = (1, 27, "B11[51]", "lutff_5/out", "sp4_v_b_26")
+FABRIC_FLIP = (0, 28, "B15[52]", "slf_op_7", "sp4_r_v_b_15")
 
 failures: list[str] = []
 
@@ -186,6 +193,144 @@ def main() -> int:
         f"{sorted(i for i in identities if i)}",
     )
 
+    # --- known positive: a second source on the HFOSC fabric output ----------
+    print("\n=== the direct fabric output is a source too ===")
+    endpoints = oscillator_fabric_endpoints(icebox)
+    check(
+        "both fabric endpoints come from icebox's cell database, not from here",
+        endpoints == {"hfosc": [(0, 28, "slf_op_7")], "lfosc": [(25, 29, "slf_op_0")]},
+        f"{endpoints}",
+    )
+    check(
+        "HFOSC annotates its direct fabric output",
+        sources.get((0, 28, "slf_op_7")) == ("hfosc", 19, 31),
+    )
+    check(
+        "LFOSC annotates its direct fabric output",
+        sources.get((25, 29, "slf_op_0")) == ("lfosc", 6, 31),
+    )
+    check(
+        "each shares the identity of its global path",
+        sources.get((0, 28, "slf_op_7")) == sources.get((19, 31, "glb_netwk_4"))
+        and sources.get((25, 29, "slf_op_0")) == sources.get((6, 31, "glb_netwk_5")),
+        "two paths from one oscillator; separate identities would collide where they meet",
+    )
+    check(
+        "LEDDA's endpoints in the same tile are not swept up with it",
+        (0, 28, "slf_op_4") not in sources and (0, 28, "slf_op_6") not in sources,
+        "(0,28) hosts both; ownership is by slf_op index, never by tile",
+    )
+
+    # Unlike the selector above, this baseline does enable one route: nothing in
+    # the fixture drives any destination the fabric segment can reach, so the
+    # driver has to be put there.  The invariant asserted is therefore exact
+    # identity of the added route, and a conflict count still at zero.
+    icebox_f, ic_f = load(ASC)
+    px, py, pbit, psource, pdest = FABRIC_PRESET
+    before_routes = enabled_routes(ic_f, icebox_f)
+    set_bit(ic_f, px, py, pbit, "1")
+    after_routes = enabled_routes(ic_f, icebox_f)
+    check(
+        "the fabric baseline enables exactly the one intended route",
+        after_routes - before_routes == {(px, py, psource, pdest)}
+        and not (before_routes - after_routes),
+        f"+{sorted(after_routes - before_routes)} "
+        f"-{len(before_routes - after_routes)}",
+    )
+    check(
+        "and leaves the conflict count at zero",
+        conflicting_nets(ic_f, icebox_f) == 0,
+    )
+    ic_f.write_file(str(FABRIC_SELECTOR_ASC))
+    print(f"  wrote {FABRIC_SELECTOR_ASC}")
+
+    icebox_fp, ic_fp = load(FABRIC_SELECTOR_ASC)
+    graph_fp = GlobalDriverGraph(ic_fp, icebox_fp)
+    fx, fy, fbit, fsource, fdest = FABRIC_FLIP
+    f_entries, _f_muxes, f_bit_to_entries = tile_model(ic_fp, fx, fy)
+    f_bits = signed_tile_bits(ic_fp.tile(fx, fy))
+    f_changed = set(f_bits)
+    f_changed.discard(f"!{fbit}")
+    f_changed.add(fbit)
+    f_additions, f_removals = [], []
+    for index in f_bit_to_entries[fbit]:
+        entry = f_entries[index]
+        was = all(bit in f_bits for bit in entry[0])
+        now = all(bit in f_changed for bit in entry[0])
+        if now and not was:
+            f_additions.append(entry)
+        elif was and not now:
+            f_removals.append(entry)
+    f_hit, f_drivers = graph_fp.mutation_creates_multi_driver(
+        fx, fy, f_additions, f_removals
+    )
+    f_base = conflicting_nets(ic_fp, icebox_fp)
+    set_bit(ic_fp, fx, fy, fbit, "1")
+    f_after = conflicting_nets(ic_fp, icebox_fp)
+    f_pll_sources, f_pll_blocks = pll_driver_state(ic_fp, icebox_fp)
+    f_identities = {
+        driver_identity(
+            ic_fp,
+            icebox_fp,
+            segment,
+            f_pll_sources,
+            f_pll_blocks,
+            spram_driver_state(ic_fp),
+            oscillator_driver_state(ic_fp, f_pll_sources, icebox_fp),
+        )
+        for segment in f_drivers
+    }
+    print(f"\nHFOSC fabric positive: tile=({fx},{fy}) bit={fbit}")
+    for entry in f_additions:
+        print(f"  add: {entry[2]} -> {entry[3]}")
+    print(f"  drivers: {f_drivers}")
+    print(f"  identities: {sorted(i for i in f_identities if i)}")
+    check(
+        "exactly one addition, no removal",
+        len(f_additions) == 1 and not f_removals and f_additions[0][2] == fsource,
+    )
+    check("model reports a conflict", f_hit)
+    check(
+        "oracle conflict-net delta is +1",
+        f_after - f_base == 1,
+        f"delta={f_after - f_base}",
+    )
+    check(
+        "the HFOSC participates as a source through its fabric output",
+        ("hfosc", 19, 31) in f_identities,
+        f"{sorted(i for i in f_identities if i)}",
+    )
+    # The counterfactual, actually run: rebuild the graph with the fabric
+    # endpoint's identity withheld and evaluate the same flip.  Asserting only
+    # that the identity exists would not show it is what decides the verdict.
+    original_state = exhaustive.oscillator_driver_state
+
+    def without_fabric_endpoint(ic_arg, pll_arg, icebox_arg=None):
+        sources = original_state(ic_arg, pll_arg, icebox_arg)
+        sources.pop((fx, fy, fsource), None)
+        return sources
+
+    exhaustive.oscillator_driver_state = without_fabric_endpoint
+    try:
+        _icebox_cf, ic_cf = load(FABRIC_SELECTOR_ASC)
+        graph_cf = GlobalDriverGraph(ic_cf, _icebox_cf)
+        cf_hit, cf_drivers = graph_cf.mutation_creates_multi_driver(
+            fx, fy, f_additions, f_removals
+        )
+    finally:
+        exhaustive.oscillator_driver_state = original_state
+    check(
+        "withholding just this endpoint's identity makes the same flip look clean",
+        graph_cf.driver_identity((fx, fy, fsource)) is None and not cf_hit,
+        f"identity={graph_cf.driver_identity((fx, fy, fsource))}, conflict={cf_hit}, "
+        f"drivers={cf_drivers}",
+    )
+    check(
+        "and the global path's identity is untouched by that removal",
+        graph_cf.driver_identity((19, 31, "glb_netwk_4")) == ("hfosc", 19, 31),
+        "only the fabric endpoint was withheld, so the false negative is localised",
+    )
+
     # --- negative regressions ------------------------------------------------
     print("\n=== negative regressions ===")
     icebox_d, ic_d = load(ASC)
@@ -213,6 +358,17 @@ def main() -> int:
         "a design with no hard IP gets no oscillator identity",
         not oscillator_driver_state(ic_l, {}),
     )
+    check(
+        "and in particular no identity on the fabric endpoints",
+        (0, 28, "slf_op_7") not in oscillator_driver_state(ic_l, {})
+        and (25, 29, "slf_op_0") not in oscillator_driver_state(ic_l, {}),
+        "otherwise every design would gain two drivers it does not have",
+    )
+    check(
+        "dropping padin 4 drops the HFOSC fabric endpoint with it",
+        (0, 28, "slf_op_7") not in without_hf
+        and without_hf.get((25, 29, "slf_op_0")) == ("lfosc", 6, 31),
+    )
 
     _icebox_pll, ic_pll = load(ASC.with_name("pll.asc"))
     pll_only, _blocks = pll_driver_state(ic_pll, _icebox_pll)
@@ -230,10 +386,14 @@ def main() -> int:
         return 1
     print("PASS: oscillator fixture, the HFOSC positive, and every negative regression")
     print(
-        "Coverage boundary: HFOSC only.  The LFOSC global's fabout sits in io "
+        "Coverage boundary: the HFOSC global and both fabric endpoints.  The LFOSC "
+        "global's fabout sits in io "
         "tile (12,0), which package sg48 does not bond out, so no LUT output can "
         "be brought to that mux and no second source can be constructed there.  "
-        "The remaining hard IP (I2C, SPI, RGB drivers) is still unmodelled."
+        "SB_I2C and SB_SPI have their own fixtures (make i2c-check, "
+        "make spi-check).  LEDDA is still unmodelled; SB_RGBA_DRV has no "
+        "fabric-facing output and is not applicable to the driver graph "
+        "(make rgba-check)."
     )
     return 0
 

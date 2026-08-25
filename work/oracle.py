@@ -18,9 +18,12 @@ That is a claim about the silicon, not about either implementation, so it is
 not independently tested here.
 
 `glb_netwk_*` is deliberately NOT treated as a driver: it is a distribution
-network, not a source.  When configuration connects a PLL output to one, the
-PLL identity is annotated on that passive endpoint.  Oscillators and other
-hard-IP sources are not modelled yet -- see the coverage note printed at the
+network, not a source.  When configuration connects a PLL or oscillator output
+to one, that block's identity is annotated on the passive endpoint.  PLL,
+SPRAM, both oscillators (global and direct fabric outputs) and both SB_I2C
+instances and both SB_SPI instances are modelled.  LEDDA is surveyed but not
+modelled; SB_RGBA_DRV has no fabric-facing output, so it is not applicable to
+this graph rather than missing from it -- see the coverage note printed at the
 end of a run.
 
 The full adds-only sweep over `leds` is ~49k rebuilds, so runs are resumable:
@@ -48,7 +51,7 @@ sys.path.insert(0, str(HERE))
 from iceutil import COLS, ROWS, load_icebox, signed_tile_bits  # noqa: E402
 
 # Driver identities.  A distribution network (glb_netwk_*) is not a source.
-LUT_DRIVER = re.compile(r"lutff_([0-7])/(out|lout)").fullmatch
+LUT_DRIVER = re.compile(r"lutff_([0-7])/(out|lout|cout)").fullmatch
 IO_DRIVER = re.compile(r"io_([01])/D_IN_([01])").fullmatch
 RAM_DRIVER = re.compile(r"ram/RDATA_\d+").fullmatch
 DSP_DRIVER = re.compile(r"mult/O_\d+").fullmatch
@@ -295,16 +298,118 @@ def spram_driver_state(ic):
     return sources
 
 
+def enable_gated_driver_state(ic, icebox, kind, label):
+    """Annotate the segments driven by an enabled instance of `kind`.
+
+    Derived here from the cell database independently of exhaustive.py, like
+    everything else in this file: it exists to disagree with the model, so it
+    must not import the model's answer.  Both instances are enumerated, each
+    output port is its own identity, and ownership is decided per port -- tiles
+    (0,29) and (25,29) each carry outputs of two different hard IPs.
+
+    The gate is that instance's full set of `<KIND>_ENABLE` bits.  A
+    configuration with only some of them set is not claimed either way here;
+    see `enable_gated_undetermined` and the note in exhaustive.py.
+    """
+    sources = {}
+    for placement, cell in _enable_gated_cells(icebox, kind):
+        if _enable_gated_state(ic, cell, kind) != "on":
+            continue
+        x, y, _z = placement
+        for port, value in cell.items():
+            if (
+                isinstance(value, tuple)
+                and len(value) == 3
+                and str(value[2]).startswith("slf_op")
+            ):
+                sources[(value[0], value[1], value[2])] = (label, x, y, str(port))
+    return sources
+
+
+def enable_gated_undetermined(ic, icebox, kind):
+    """Instances whose enabling bits disagree with each other."""
+    return sorted(
+        placement
+        for placement, cell in _enable_gated_cells(icebox, kind)
+        if _enable_gated_state(ic, cell, kind) == "mixed"
+    )
+
+
+def _enable_gated_cells(icebox, kind):
+    return sorted(
+        (key[1], cell)
+        for key, cell in icebox.extra_cells_db["5k"].items()
+        if key[0] == kind
+    )
+
+
+def _enable_gated_state(ic, cell, kind) -> str:
+    values = [
+        ipconfig_bit(ic, value[0], value[1], value[2])
+        for port, value in sorted(cell.items())
+        if str(port).startswith(f"{kind}_ENABLE")
+    ]
+    if values and all(value == "1" for value in values):
+        return "on"
+    if values and all(value == "0" for value in values):
+        return "off"
+    return "mixed"
+
+
+def i2c_driver_state(ic, icebox=None):
+    if icebox is None:
+        icebox = load_icebox()
+    return enable_gated_driver_state(ic, icebox, "I2C", "i2c")
+
+
+def i2c_undetermined(ic, icebox=None):
+    if icebox is None:
+        icebox = load_icebox()
+    return enable_gated_undetermined(ic, icebox, "I2C")
+
+
+def spi_driver_state(ic, icebox=None):
+    if icebox is None:
+        icebox = load_icebox()
+    return enable_gated_driver_state(ic, icebox, "SPI", "spi")
+
+
+def spi_undetermined(ic, icebox=None):
+    if icebox is None:
+        icebox = load_icebox()
+    return enable_gated_undetermined(ic, icebox, "SPI")
+
+
 # padin index -> on-chip oscillator, established by placing each oscillator
 # alone: HFOSC alone sets padin_glb_netwk 4, LFOSC alone sets 5.
 OSCILLATOR_PADIN = {4: "hfosc", 5: "lfosc"}
 
 
-def oscillator_driver_state(ic, pll_sources):
-    """Annotate the global networks driven by the on-chip oscillators.
+def oscillator_fabric_endpoints(icebox) -> dict:
+    """`kind -> segments` for the oscillators' direct fabric outputs.
+
+    Derived here from the cell database independently of exhaustive.py: this
+    file exists to disagree with the model when the model is wrong, so it must
+    not import the model's answer.
+    """
+    endpoints = {}
+    for key, cell in icebox.extra_cells_db["5k"].items():
+        kind = str(key[0]).lower()
+        if kind not in ("hfosc", "lfosc"):
+            continue
+        for port, value in cell.items():
+            if str(port).endswith("_FABRIC"):
+                endpoints.setdefault(kind, set()).add((value[0], value[1], value[2]))
+    return {kind: sorted(segments) for kind, segments in endpoints.items()}
+
+
+def oscillator_driver_state(ic, pll_sources, icebox=None):
+    """Annotate the segments driven by the on-chip oscillators.
 
     An oscillator, like a PLL global output, reaches `glb_netwk_*` with no
     source segment of its own, so the whole network is otherwise driverless.
+    It also has a second output that enters the fabric directly; both carry the
+    same identity, because they are two paths from one physical source.
 
     The pad-versus-hard-IP ambiguity is resolved by measurement, not assumption:
     driving a global from the very package pin that shares padin index 4 sets no
@@ -312,8 +417,11 @@ def oscillator_driver_state(ic, pll_sources):
     `padin_glb_netwk` extra bit means the source is on-chip.  Only the two
     indices with evidence are annotated; any other index is left alone.
     """
+    if icebox is None:
+        icebox = load_icebox()
     sources = {}
     padin = ic.padin_pio_db()
+    fabric = oscillator_fabric_endpoints(icebox)
     for bit in ic.extra_bits:
         entry = ic.lookup_extra_bit(bit)
         if entry[0] != "padin_glb_netwk":
@@ -329,18 +437,25 @@ def oscillator_driver_state(ic, pll_sources):
             # identity for one physical source.
             continue
         sources[segment] = (kind, x, y)
+        for endpoint in fabric.get(kind, ()):
+            sources[endpoint] = (kind, x, y)
     return sources
 
 
 def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
-                    spram_sources=None, oscillator_sources=None):
+                    spram_sources=None, oscillator_sources=None,
+                    i2c_sources=None, spi_sources=None):
     x, y, name = segment
     if pll_sources is None or pll_blocks is None:
         pll_sources, pll_blocks = pll_driver_state(ic, icebox)
     if spram_sources is None:
         spram_sources = spram_driver_state(ic)
     if oscillator_sources is None:
-        oscillator_sources = oscillator_driver_state(ic, pll_sources)
+        oscillator_sources = oscillator_driver_state(ic, pll_sources, icebox)
+    if i2c_sources is None:
+        i2c_sources = i2c_driver_state(ic, icebox)
+    if spi_sources is None:
+        spi_sources = spi_driver_state(ic, icebox)
     pll = pll_sources.get(segment)
     if pll is not None:
         return pll
@@ -350,11 +465,24 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
     oscillator = oscillator_sources.get(segment)
     if oscillator is not None:
         return oscillator
+    i2c = i2c_sources.get(segment)
+    if i2c is not None:
+        return i2c
+    spi = spi_sources.get(segment)
+    if spi is not None:
+        return spi
     lut = LUT_DRIVER(name)
     if lut and (x, y) in ic.logic_tiles:
         index = int(lut.group(1))
-        registered = icebox.get_lutff_seq_bits(ic.logic_tiles[(x, y)], index)[1] == "1"
-        return ("lutff", x, y, index, lut.group(2) if registered else "comb")
+        sequential = icebox.get_lutff_seq_bits(ic.logic_tiles[(x, y)], index)
+        if lut.group(2) == "cout":
+            # Carry out is its own physical output, but only when the cell
+            # generates carry: `cout -> in_3` is programmable routing, so a
+            # mutation can surface the segment in a cell with carry disabled.
+            if sequential[0] != "1":
+                return None
+            return ("lutff", x, y, index, "carry")
+        return ("lutff", x, y, index, lut.group(2) if sequential[1] == "1" else "comb")
     io = IO_DRIVER(name)
     if io and (x, y, int(io.group(1))) in pll_blocks:
         return None
@@ -367,13 +495,70 @@ def driver_identity(ic, icebox, segment, pll_sources=None, pll_blocks=None,
     return None
 
 
+def assert_distinct_hard_ip(*named_sources) -> None:
+    """Refuse any segment claimed by two hard-IP annotations.
+
+    Every pair is compared, not each new block against the older ones.  Tiles
+    (0,29) and (25,29) each carry outputs of two different blocks, so a wrong
+    ownership rule would show up here rather than as a wrong verdict.
+    """
+    for index, (name, sources) in enumerate(named_sources):
+        for other_name, other in named_sources[index + 1 :]:
+            clash = sources.keys() & other.keys()
+            if clash:
+                raise RuntimeError(
+                    f"{name} and {other_name} both claim {sorted(clash)}"
+                )
+
+
 def conflicting_nets(ic, icebox) -> int:
     """Rebuild the whole graph and count nets carrying more than one source."""
     total = 0
+    for kind, placements in (
+        ("SB_I2C", i2c_undetermined(ic, icebox)),
+        ("SB_SPI", spi_undetermined(ic, icebox)),
+    ):
+        if placements:
+            # See exhaustive.GlobalDriverGraph: counting conflicts while an
+            # instance's enable state is unknown would report the unknown as
+            # zero.
+            raise RuntimeError(
+                f"{kind} instance(s) {placements} have only some of their "
+                "enable bits set; no conflict count is produced"
+            )
+    # Decoded once per call, not once per segment: the configuration does not
+    # change while the graph is being walked, and re-deriving the hard-IP state
+    # for every segment costs the same answer several hundred thousand times.
     pll_sources, pll_blocks = pll_driver_state(ic, icebox)
+    spram_sources = spram_driver_state(ic)
+    oscillator_sources = oscillator_driver_state(ic, pll_sources, icebox)
+    i2c_sources = i2c_driver_state(ic, icebox)
+    spi_sources = spi_driver_state(ic, icebox)
+    # `driver_identity` consults the hard-IP maps in a fixed order, so an
+    # overlap would not be reported as a conflict -- the first map queried
+    # would silently own the segment.  The model refuses to build a graph in
+    # that case; this file has to refuse independently, or the cross-check
+    # would inherit the model's guard instead of confirming it.
+    assert_distinct_hard_ip(
+        ("PLL", pll_sources),
+        ("SPRAM", spram_sources),
+        ("oscillator", oscillator_sources),
+        ("I2C", i2c_sources),
+        ("SPI", spi_sources),
+    )
     for segments in ic.group_segments():
         identities = {
-            driver_identity(ic, icebox, segment, pll_sources, pll_blocks)
+            driver_identity(
+                ic,
+                icebox,
+                segment,
+                pll_sources,
+                pll_blocks,
+                spram_sources,
+                oscillator_sources,
+                i2c_sources,
+                spi_sources,
+            )
             for segment in segments
         }
         identities.discard(None)
@@ -628,9 +813,10 @@ def main() -> int:
     ):
         print(f"  tile=({record['x']},{record['y']}) bit=B{record['row']}[{record['column']}]")
     print(
-        "\nDriver identities: LUT/IO-input/RAM-read/UP5K-DSP/PLL/SPRAM outputs. "
-        "glb_netwk_* is a distribution network and is not counted as a source; "
-        "other hard-IP outputs remain outside this oracle's coverage."
+        "\nDriver identities: LUT/IO-input/RAM-read/UP5K-DSP/PLL/SPRAM/oscillator"
+        "/SB_I2C/SB_SPI outputs.  glb_netwk_* is a distribution network and is "
+        "not counted as a source; LEDDA remains outside this oracle's coverage, "
+        "and SB_RGBA_DRV has no fabric-facing output to cover."
     )
     return 1 if disagreements else 0
 

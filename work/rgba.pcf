@@ -1,0 +1,7 @@
+# Constraints used by work/rgba.v.  The three RGB pins are the driver's own
+# pads: nextpnr creates no SB_IO for them, which is one of the observations
+# behind the negative verdict.
+set_io clk 35
+set_io RGB0 39
+set_io RGB1 40
+set_io RGB2 41

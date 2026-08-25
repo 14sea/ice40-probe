@@ -193,8 +193,10 @@ def main() -> int:
         "Coverage boundary: one SB_SPRAM256KA in ipcon column 0, read-data path "
         "only.  The write path, the second instance per column and the "
         "right-hand column are not exercised.  The PLL and the on-chip "
-        "oscillators have their own fixtures; I2C, SPI and the RGB drivers are "
-        "not modelled."
+        "oscillators have their own fixtures, as do SB_I2C and SB_SPI.  LEDDA "
+        "is not modelled -- its enable state is not a configuration fact -- and "
+        "SB_RGBA_DRV has no fabric-facing output and is not applicable to the "
+        "driver graph (make rgba-check)."
     )
     return 0
 
