@@ -8,10 +8,14 @@
 
 ## 依據
 
-- iCESugar v1.5 原理圖（`/home/test/icesugar/icesugar/schematic/iCESugar-v1.5.pdf`）
-- 板子：YD-ESP32-C3（`/home/test/ESP32C3/doc/YD-ESP32-C3/`），現接在 `/dev/ttyACM1`
-  （原生 USB JTAG/serial，`303a:1001`）。iCELink CDC 是 `/dev/ttyACM0`。
+- iCESugar v1.5 原理圖 —— 上游倉庫 [github.com/wuxx/icesugar](https://github.com/wuxx/icesugar)
+  的 `schematic/iCESugar-v1.5.pdf`
+- 板子：YD-ESP32-C3（原生 USB JTAG/serial，USB ID `303a:1001`）
 - Lattice iCE40 Programming and Configuration（slave SPI 流程）
+
+> **裝置節點是當時本機的枚舉結果，不是可重現的路徑。** 撰寫當下 ESP32-C3 枚舉為
+> `/dev/ttyACM1`、iCELink CDC 為 `/dev/ttyACM0`；`ttyACMn` 的編號隨插拔順序改變，
+> 請依 USB ID 自行判定，不要照抄。
 
 ## 關鍵事實（原理圖確認）
 
