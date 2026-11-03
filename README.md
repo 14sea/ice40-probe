@@ -179,6 +179,14 @@ No routing-risk candidate was programmed because no current measurement was
 available. The board was left with the same `leds_mut3.bin` image it had at the
 start. See `docs/findings.md` for hashes and evidence boundaries.
 
+## Prior art
+
+Single-bit flip classification against the open database's routing model was published by
+Fibich et al. (DATE 2023, with silicon measurements on the same iCE40UP5K part), and
+restricting mutation to a safe bit subset by Fritzsch et al. (CEC 2022) and the
+BitstreamEvolution project. Their rates and ours are measured on different denominators
+and are not comparable. See [`docs/PRIOR_ART.md`](docs/PRIOR_ART.md) (2026-11-03).
+
 ## Scope
 
 This project checks that Project IceStorm's and nextpnr's published model of
